@@ -762,6 +762,35 @@ h6 {
   font-size: 14px;
 }
 
+.login-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.login-success {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 14px;
+}
+
+.login-secondary-button {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 11px 16px;
+  background: #fff;
+  color: #334155;
+  font-weight: 600;
+}
+
+.login-secondary-button:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
 @media (max-width: 980px) {
   .dashboard-layout {
     grid-template-columns: 1fr;

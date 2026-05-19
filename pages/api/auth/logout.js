@@ -6,10 +6,7 @@ export default async function handler(req, res) {
     : '/login'
   const secure = process.env.NODE_ENV === 'production'
 
-  res.setHeader(
-    'Set-Cookie',
-    `${buildLogoutCookie()}${secure ? '; Secure' : ''}`
-  )
+  res.setHeader('Set-Cookie', `${buildLogoutCookie()}${secure ? '; Secure' : ''}`)
   res.writeHead(302, { Location: redirect })
   res.end()
 }

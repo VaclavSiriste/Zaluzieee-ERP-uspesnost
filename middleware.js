@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 
 const AUTH_COOKIE_NAME = 'dashboard_auth'
-const ALLOWED_DOMAIN = 'zaluzieee.cz'
 const AUTH_SECRET = process.env.APP_AUTH_SECRET || 'local-dashboard-auth-secret'
 
 function isAllowedPath(pathname) {
@@ -45,7 +44,10 @@ function parsePayload(encodedPayload) {
 }
 
 function isAllowedEmail(email) {
-  return typeof email === 'string' && /^[^\s@]+@zaluzieee\.cz$/.test(email.toLowerCase())
+  return (
+    typeof email === 'string' &&
+    /^[^\s@]+@(zaluzieee\.cz|demaxia\.cz)$/.test(email.trim().toLowerCase())
+  )
 }
 
 async function hasValidSession(token) {
@@ -73,8 +75,7 @@ export async function middleware(request) {
   }
 
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value
-  const valid = await hasValidSession(token)
-  if (valid) {
+  if (await hasValidSession(token)) {
     return NextResponse.next()
   }
 
