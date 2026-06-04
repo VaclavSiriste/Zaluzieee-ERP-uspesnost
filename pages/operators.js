@@ -3,6 +3,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
+import MetricDrilldown from '@/components/MetricDrilldown'
+import DrilldownCount from '@/components/DrilldownCount'
+import DrilldownMoney from '@/components/DrilldownMoney'
+import DrilldownDays from '@/components/DrilldownDays'
+import { useMetricDrilldown, DRILL } from '@/hooks/useMetricDrilldown'
 
 export default function OperatorsPage() {
   const router = useRouter()
@@ -13,6 +18,18 @@ export default function OperatorsPage() {
   const [bubbles, setBubbles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const drilldownFilters = { period, dateBasis, startDate, endDate }
+  const { openDrilldown, drilldownProps } = useMetricDrilldown(drilldownFilters)
+
+  function openForOperator(metric, operatorName, title, zamerovac) {
+    openDrilldown({
+      metric,
+      domluvil: operatorName,
+      zamerovac,
+      title
+    })
+  }
 
   useEffect(() => {
     if (!router.isReady) return
@@ -117,7 +134,7 @@ export default function OperatorsPage() {
         <div className="dashboard-main">
           <header className="dashboard-header">
             <h1>Příjem zakázek</h1>
-            <p>Přehled podle {getDateBasisLabel(dateBasis)}. Úspěšnost se počítá z Ano/(Ano+Ne).</p>
+            <p>Přehled podle {getDateBasisLabel(dateBasis)}. Kliknutím na číslo zobrazíte seznam zakázek.</p>
           </header>
 
           <FilterAssistant
@@ -148,12 +165,92 @@ export default function OperatorsPage() {
                 >
                   <h3>{bubble.operator_name}</h3>
                   <p>
-                    Celkem (Ano+Ne): <strong>{bubble.total_decided}</strong> | Ano: <strong>{bubble.ano}</strong> | Ne: <strong>{bubble.ne}</strong> | Čekáme: <strong>{bubble.cekame}</strong> | Bez výsledku: <strong>{bubble.bez_hodnoty}</strong>
+                    Všechny stavy:{' '}
+                    <DrilldownCount
+                      count={bubble.total_all}
+                      onOpen={() => openForOperator(DRILL.scheduled, bubble.operator_name, `${bubble.operator_name} — všechny stavy`)}
+                    />
+                    {' '}| Celkem (Ano+Ne):{' '}
+                    <DrilldownCount
+                      count={bubble.total_decided}
+                      onOpen={() => openForOperator(DRILL.decided, bubble.operator_name, `${bubble.operator_name} — Ano+Ne`)}
+                    />
+                    {' '}| Ano:{' '}
+                    <DrilldownCount
+                      count={bubble.ano}
+                      className="success"
+                      onOpen={() => openForOperator(DRILL.completed, bubble.operator_name, `${bubble.operator_name} — Ano`)}
+                    />
+                    {' '}| Ne:{' '}
+                    <DrilldownCount
+                      count={bubble.ne}
+                      className="danger"
+                      onOpen={() => openForOperator(DRILL.cancelled, bubble.operator_name, `${bubble.operator_name} — Ne`)}
+                    />
+                    {' '}| Čekáme:{' '}
+                    <DrilldownCount
+                      count={bubble.cekame}
+                      onOpen={() => openForOperator(DRILL.waiting, bubble.operator_name, `${bubble.operator_name} — Čekáme`)}
+                    />
+                    {' '}| Bez výsledku:{' '}
+                    <DrilldownCount
+                      count={bubble.bez_hodnoty}
+                      onOpen={() => openForOperator(DRILL.missing, bubble.operator_name, `${bubble.operator_name} — Bez výsledku`)}
+                    />
                   </p>
                   <p>
-                    Průměr celkové ceny s DPH: <strong>{formatMoney(bubble.avg_sale_with_vat)} Kč</strong> | Průměr celkové ceny bez DPH: <strong>{formatMoney(bubble.avg_sale_without_vat)} Kč</strong>
+                    Průměr celkové ceny s DPH:{' '}
+                    <strong>
+                      <DrilldownMoney
+                        count={bubble.sale_count_with_vat || bubble.ano}
+                        amount={`${formatMoney(bubble.avg_sale_with_vat)} Kč`}
+                        onOpen={() => openForOperator(DRILL.completed, bubble.operator_name, `${bubble.operator_name} — zakázky tvořící průměr s DPH`)}
+                      />
+                    </strong>
+                    {' '}| Průměr celkové ceny bez DPH:{' '}
+                    <strong>
+                      <DrilldownMoney
+                        count={bubble.sale_count_without_vat || bubble.ano}
+                        amount={`${formatMoney(bubble.avg_sale_without_vat)} Kč`}
+                        onOpen={() => openForOperator(DRILL.completed, bubble.operator_name, `${bubble.operator_name} — zakázky tvořící průměr bez DPH`)}
+                      />
+                    </strong>
                   </p>
-                  <p className="highlight">Úspěšnost (Ano/(Ano+Ne)): {bubble.success_rate}%</p>
+                  <p className="duration-metrics-line">
+                    Průměr přijetí → navolání:{' '}
+                    <DrilldownDays
+                      count={bubble.count_lead_navolani}
+                      days={bubble.avg_days_lead_navolani}
+                      onOpen={() => openForOperator(DRILL.durationLeadNavolani, bubble.operator_name, `${bubble.operator_name} — přijetí → navolání`)}
+                    />
+                    {' '}| Navolání → zaměření:{' '}
+                    <DrilldownDays
+                      count={bubble.count_navolani_zamereni}
+                      days={bubble.avg_days_navolani_zamereni}
+                      onOpen={() => openForOperator(DRILL.durationNavolaniZamereni, bubble.operator_name, `${bubble.operator_name} — navolání → zaměření`)}
+                    />
+                    {' '}| Příjem → zaměření:{' '}
+                    <DrilldownDays
+                      count={bubble.count_lead_zamereni}
+                      days={bubble.avg_days_lead_zamereni}
+                      onOpen={() => openForOperator(DRILL.durationLeadZamereni, bubble.operator_name, `${bubble.operator_name} — přijetí → zaměření`)}
+                    />
+                  </p>
+                  <p className="highlight">
+                    Úspěšnost (Ano/(Ano+Ne)):{' '}
+                    <DrilldownCount
+                      count={bubble.total_decided}
+                      onOpen={() => openForOperator(DRILL.decided, bubble.operator_name, `${bubble.operator_name} — úspěšnost`)}
+                    />
+                    {' '}
+                    (
+                    <DrilldownCount
+                      count={bubble.total_decided}
+                      text={`${bubble.success_rate}%`}
+                      onOpen={() => openForOperator(DRILL.decided, bubble.operator_name, `${bubble.operator_name} — úspěšnost`)}
+                    />
+                    )
+                  </p>
 
                   <div className="table-scroll bubble-scroll">
                     <table className="leaderboard-table bubble-table">
@@ -166,6 +263,9 @@ export default function OperatorsPage() {
                         <col className="col-missing" />
                         <col className="col-avg" />
                         <col className="col-avg2" />
+                        <col className="col-duration" />
+                        <col className="col-duration" />
+                        <col className="col-duration" />
                         <col className="col-success" />
                       </colgroup>
                       <thead>
@@ -178,6 +278,9 @@ export default function OperatorsPage() {
                           <th>Bez výsledku</th>
                           <th>Průměr s DPH</th>
                           <th>Průměr bez DPH</th>
+                          <th title="Průměrný počet dní od přijetí leadu do navolání">Příjem→Navolání</th>
+                          <th title="Průměrný počet dní od navolání do zaměření">Navolání→Zaměření</th>
+                          <th title="Průměrný počet dní od přijetí leadu do zaměření">Příjem→Zaměření</th>
                           <th>Úspěšnost</th>
                         </tr>
                       </thead>
@@ -192,14 +295,87 @@ export default function OperatorsPage() {
                                 {z.zamerovac_name}
                               </Link>
                             </td>
-                            <td>{z.total_decided}</td>
-                            <td className="success">{z.ano}</td>
-                            <td className="danger">{z.ne}</td>
-                            <td>{z.cekame}</td>
-                            <td>{z.bez_hodnoty}</td>
-                            <td>{formatMoney(z.avg_sale_with_vat)} Kč</td>
-                            <td>{formatMoney(z.avg_sale_without_vat)} Kč</td>
-                            <td className="highlight">{z.success_rate}%</td>
+                            <td>
+                              <DrilldownCount
+                                count={z.total_decided}
+                                onOpen={() => openForOperator(DRILL.decided, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — Celkem`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td className="success">
+                              <DrilldownCount
+                                count={z.ano}
+                                className="success"
+                                onOpen={() => openForOperator(DRILL.completed, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — Ano`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td className="danger">
+                              <DrilldownCount
+                                count={z.ne}
+                                className="danger"
+                                onOpen={() => openForOperator(DRILL.cancelled, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — Ne`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td>
+                              <DrilldownCount
+                                count={z.cekame}
+                                onOpen={() => openForOperator(DRILL.waiting, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — Čekáme`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td>
+                              <DrilldownCount
+                                count={z.bez_hodnoty}
+                                onOpen={() => openForOperator(DRILL.missing, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — Bez výsledku`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td>
+                              <DrilldownMoney
+                                count={z.sale_count_with_vat || z.ano}
+                                amount={`${formatMoney(z.avg_sale_with_vat)} Kč`}
+                                onOpen={() => openForOperator(DRILL.completed, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — průměr s DPH`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td>
+                              <DrilldownMoney
+                                count={z.sale_count_without_vat || z.ano}
+                                amount={`${formatMoney(z.avg_sale_without_vat)} Kč`}
+                                onOpen={() => openForOperator(DRILL.completed, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — průměr bez DPH`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td>
+                              <DrilldownDays
+                                count={z.count_lead_navolani}
+                                days={z.avg_days_lead_navolani}
+                                onOpen={() => openForOperator(DRILL.durationLeadNavolani, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — přijetí → navolání`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td>
+                              <DrilldownDays
+                                count={z.count_navolani_zamereni}
+                                days={z.avg_days_navolani_zamereni}
+                                onOpen={() => openForOperator(DRILL.durationNavolaniZamereni, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — navolání → zaměření`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td>
+                              <DrilldownDays
+                                count={z.count_lead_zamereni}
+                                days={z.avg_days_lead_zamereni}
+                                onOpen={() => openForOperator(DRILL.durationLeadZamereni, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — přijetí → zaměření`, z.zamerovac_name)}
+                              />
+                            </td>
+                            <td className="highlight">
+                              <DrilldownCount
+                                count={z.total_decided}
+                                onOpen={() => openForOperator(DRILL.decided, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — úspěšnost`, z.zamerovac_name)}
+                              />
+                              {' '}
+                              (
+                              <DrilldownCount
+                                count={z.total_decided}
+                                text={`${z.success_rate}%`}
+                                onOpen={() => openForOperator(DRILL.decided, bubble.operator_name, `${bubble.operator_name} / ${z.zamerovac_name} — úspěšnost`, z.zamerovac_name)}
+                              />
+                              )
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -211,6 +387,8 @@ export default function OperatorsPage() {
           ) : null}
         </div>
       </div>
+
+      <MetricDrilldown {...drilldownProps} onRefine={openDrilldown} />
     </main>
   )
 }

@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
+import MetricDrilldown from '@/components/MetricDrilldown'
+import DrilldownCount from '@/components/DrilldownCount'
+import { useMetricDrilldown, DRILL } from '@/hooks/useMetricDrilldown'
 
 export default function NeprobehleZakazkyPzPage() {
   const router = useRouter()
@@ -13,6 +16,19 @@ export default function NeprobehleZakazkyPzPage() {
   const [bubbles, setBubbles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const drilldownFilters = { period, dateBasis, startDate, endDate }
+  const { openDrilldown, drilldownProps } = useMetricDrilldown(drilldownFilters)
+
+  function openFailed({ zamerovac, domluvil, failedReason, title }) {
+    openDrilldown({
+      metric: DRILL.cancelled,
+      zamerovac,
+      domluvil,
+      failedReason,
+      title
+    })
+  }
 
   useEffect(() => {
     if (!router.isReady) return
@@ -149,11 +165,25 @@ export default function NeprobehleZakazkyPzPage() {
                   <p>
                     Neproběhlé zakázky celkem:
                     {' '}
-                    <strong>{bubble.total_failed}</strong>
+                    <strong>
+                      <DrilldownCount
+                        count={bubble.total_failed}
+                        className="danger"
+                        onOpen={() => openFailed({
+                          domluvil: bubble.scheduler_name,
+                          title: `${bubble.scheduler_name} — neproběhlé celkem`
+                        })}
+                      />
+                    </strong>
                   </p>
 
                   <div className="table-scroll">
                     <table className="leaderboard-table failed-reasons-table">
+                      <colgroup>
+                        <col className="col-failed-label" />
+                        <col className="col-failed-count" />
+                        <col className="col-failed-share" />
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>Technik</th>
@@ -179,17 +209,61 @@ export default function NeprobehleZakazkyPzPage() {
                                     >
                                       <span>{reason.reason_label}</span>
                                       <strong>
-                                        {reason.count}
+                                        <DrilldownCount
+                                          count={reason.count}
+                                          className="danger"
+                                          onOpen={() => openFailed({
+                                            zamerovac: technician.technician_name,
+                                            domluvil: bubble.scheduler_name,
+                                            failedReason: reason.reason_slug,
+                                            title: `${bubble.scheduler_name} / ${technician.technician_name} — ${reason.reason_label}`
+                                          })}
+                                        />
                                         {' '}
-                                        <span className="failed-inline-share">({reason.share_pct_technician}%)</span>
+                                        <span className="failed-inline-share">
+                                          (
+                                          <DrilldownCount
+                                            count={reason.count}
+                                            className="danger"
+                                            text={`${reason.share_pct_technician}%`}
+                                            onOpen={() => openFailed({
+                                              zamerovac: technician.technician_name,
+                                              domluvil: bubble.scheduler_name,
+                                              failedReason: reason.reason_slug,
+                                              title: `${bubble.scheduler_name} / ${technician.technician_name} — ${reason.reason_label}`
+                                            })}
+                                          />
+                                          )
+                                        </span>
                                       </strong>
                                     </div>
                                   ))}
                                 </div>
                               ) : null}
                             </td>
-                            <td>{technician.count}</td>
-                            <td className="highlight">{technician.share_pct}%</td>
+                            <td>
+                              <DrilldownCount
+                                count={technician.count}
+                                className="danger"
+                                onOpen={() => openFailed({
+                                  zamerovac: technician.technician_name,
+                                  domluvil: bubble.scheduler_name,
+                                  title: `${bubble.scheduler_name} / ${technician.technician_name}`
+                                })}
+                              />
+                            </td>
+                            <td className="highlight">
+                              <DrilldownCount
+                                count={technician.count}
+                                className="danger"
+                                text={`${technician.share_pct}%`}
+                                onOpen={() => openFailed({
+                                  zamerovac: technician.technician_name,
+                                  domluvil: bubble.scheduler_name,
+                                  title: `${bubble.scheduler_name} / ${technician.technician_name}`
+                                })}
+                              />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -201,6 +275,8 @@ export default function NeprobehleZakazkyPzPage() {
           ) : null}
         </div>
       </div>
+
+      <MetricDrilldown {...drilldownProps} onRefine={openDrilldown} />
     </main>
   )
 }

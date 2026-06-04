@@ -1,4 +1,5 @@
 import { getPool } from '@/lib/db-esm'
+import { fetchDurationByGroup, mergeOperatorDuration } from '@/lib/duration-metrics'
 
 export default async function handler(req, res) {
   const { period = 'month', startDate, endDate } = req.query
@@ -311,6 +312,9 @@ export default async function handler(req, res) {
       if (successDiff !== 0) return successDiff
       return b.total_decided - a.total_decided
     })
+
+    const durationRows = await fetchDurationByGroup(pool, { start, end, dateBasis, grouping: 'operators' })
+    mergeOperatorDuration(bubbles, durationRows)
 
     return res.status(200).json({
       period,

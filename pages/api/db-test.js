@@ -1,32 +1,50 @@
 /**
  * Test databázového připojení
  * GET /api/db-test
+ * GET /api/db-test?db=erp|daktela|all  (výchozí: erp)
  */
 
-import { testConnection } from '@/lib/db-esm'
+import { testConnection, testDaktelaConnection, testAllConnections } from '@/lib/db-esm'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const target = String(req.query.db || 'erp').toLowerCase()
+
   try {
-    console.log('🔍 Testování databázového připojení...')
-    const connectionOk = await testConnection()
-    
-    if (connectionOk) {
-      return res.status(200).json({
-        status: 'connected',
-        message: '✅ Databáze je připojena a dostupná',
-        timestamp: new Date().toISOString()
-      })
-    } else {
-      return res.status(500).json({
-        status: 'failed',
-        message: '❌ Nepodařilo se připojit k databázi - zkontrolujte credentials a certifikát',
+    if (target === 'all') {
+      const results = await testAllConnections()
+      const ok = results.erp.ok && results.daktela.ok
+      return res.status(ok ? 200 : 500).json({
+        status: ok ? 'connected' : 'partial',
+        results,
         timestamp: new Date().toISOString()
       })
     }
+
+    if (target === 'daktela') {
+      const connectionOk = await testDaktelaConnection()
+      return res.status(connectionOk ? 200 : 500).json({
+        status: connectionOk ? 'connected' : 'failed',
+        database: 'daktela',
+        message: connectionOk
+          ? '✅ Daktela databáze je připojena'
+          : '❌ Nepodařilo se připojit k Daktela databázi',
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    const connectionOk = await testConnection()
+    return res.status(connectionOk ? 200 : 500).json({
+      status: connectionOk ? 'connected' : 'failed',
+      database: 'erp',
+      message: connectionOk
+        ? '✅ ERP databáze je připojena'
+        : '❌ Nepodařilo se připojit k ERP databázi',
+      timestamp: new Date().toISOString()
+    })
   } catch (error) {
     console.error('❌ Chyba:', error.message)
     return res.status(500).json({

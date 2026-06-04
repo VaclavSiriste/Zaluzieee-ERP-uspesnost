@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:smtp": "node scripts/test-smtp.mjs"
   },
   "dependencies": {
     "dotenv": "^17.3.1",

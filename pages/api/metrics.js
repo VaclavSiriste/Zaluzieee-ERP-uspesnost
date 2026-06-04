@@ -44,6 +44,34 @@ export default async function handler(req, res) {
       params
     )
 
+    const leadsResult = await pool.query(
+      `
+      SELECT COUNT(DISTINCT o.id) AS leads
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      WHERE o.created_at::date >= $1::date
+        AND o.created_at::date <= $2::date
+        ${regionSql}
+      `,
+      params
+    )
+
+    const leadsByRegionResult = await pool.query(
+      `
+      SELECT
+        COALESCE(NULLIF(c.region, ''), 'N/A') AS region,
+        COUNT(DISTINCT o.id) AS leads
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      WHERE o.created_at::date >= $1::date
+        AND o.created_at::date <= $2::date
+        ${regionSql}
+      GROUP BY COALESCE(NULLIF(c.region, ''), 'N/A')
+      ORDER BY leads DESC
+      `,
+      params
+    )
+
     const regionsResult = await pool.query(
       `
       WITH ${dateFilterCte ? `${dateFilterCte},` : ''}
@@ -625,6 +653,7 @@ export default async function handler(req, res) {
     )
 
     const totals = totalsResult.rows[0] || { scheduled: 0, completed: 0, cancelled: 0 }
+    const leads = Number(leadsResult.rows[0]?.leads || 0)
     const salesTotals = salesTotalsResult.rows[0] || { avg_sale_with_vat: 0, avg_sale_without_vat: 0 }
     const scheduled = Number(totals.scheduled || 0)
     const completed = Number(totals.completed || 0)
@@ -642,6 +671,10 @@ export default async function handler(req, res) {
       ]))
     )
 
+    const leadsByRegion = new Map(
+      leadsByRegionResult.rows.map((row) => [row.region, Number(row.leads || 0)])
+    )
+
     const byRegion = {}
     for (const row of regionsResult.rows) {
       const regScheduled = Number(row.scheduled || 0)
@@ -655,6 +688,7 @@ export default async function handler(req, res) {
         : '0.00'
       const regSales = salesByRegion.get(row.region) || { avg_sale_with_vat: 0, avg_sale_without_vat: 0 }
       byRegion[row.region] = {
+        leads: leadsByRegion.get(row.region) || 0,
         scheduled: regScheduled,
         completed: regCompleted,
         cancelled: regCancelled,
@@ -663,6 +697,22 @@ export default async function handler(req, res) {
         avg_sale_with_vat: Number(regSales.avg_sale_with_vat || 0).toFixed(2),
         avg_sale_without_vat: Number(regSales.avg_sale_without_vat || 0).toFixed(2),
         success_rate: regSuccessRate
+      }
+    }
+
+    for (const [region, regLeads] of leadsByRegion.entries()) {
+      if (!byRegion[region]) {
+        byRegion[region] = {
+          leads: regLeads,
+          scheduled: 0,
+          completed: 0,
+          cancelled: 0,
+          waiting: 0,
+          missing: 0,
+          avg_sale_with_vat: '0.00',
+          avg_sale_without_vat: '0.00',
+          success_rate: '0.00'
+        }
       }
     }
 
@@ -701,6 +751,7 @@ export default async function handler(req, res) {
       dateBasis,
       dateRange: { start: start.toISOString(), end: end.toISOString() },
       totals: {
+        leads,
         scheduled,
         completed,
         cancelled,
