@@ -23,7 +23,8 @@ export default function FilterAssistant({
   onEndDateChange,
   region = '',
   onRegionChange,
-  regions = []
+  regions = [],
+  hideDateBasis = false
 }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -42,12 +43,12 @@ export default function FilterAssistant({
       ? `${startDate || 'Od'} - ${endDate || 'Do'}`
       : PERIOD_OPTIONS.find((item) => item.key === period)?.label || 'Měsíc'
 
-    if (region) {
-      return `${activeDateBasis} • ${activePeriod} • ${region}`
-    }
-
-    return `${activeDateBasis} • ${activePeriod}`
-  }, [dateBasis, period, startDate, endDate, region])
+    const parts = []
+    if (!hideDateBasis) parts.push(activeDateBasis)
+    parts.push(activePeriod)
+    if (region) parts.push(region)
+    return parts.join(' • ')
+  }, [dateBasis, period, startDate, endDate, region, hideDateBasis])
 
   return (
     <>
@@ -73,21 +74,23 @@ export default function FilterAssistant({
 
             <p className="filter-assistant-summary">{activeSummary}</p>
 
-            <div className="filter-assistant-section">
-              <h3>Časová osa</h3>
-              <div className="period-group">
-                {DATE_BASIS_OPTIONS.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => onDateBasisChange && onDateBasisChange(item.key)}
-                    className={`period-button ${dateBasis === item.key ? 'active' : ''}`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+            {!hideDateBasis ? (
+              <div className="filter-assistant-section">
+                <h3>Časová osa</h3>
+                <div className="period-group">
+                  {DATE_BASIS_OPTIONS.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => onDateBasisChange && onDateBasisChange(item.key)}
+                      className={`period-button ${dateBasis === item.key ? 'active' : ''}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="filter-assistant-section">
               <h3>Rychlé období</h3>

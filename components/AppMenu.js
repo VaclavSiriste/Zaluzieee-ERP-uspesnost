@@ -10,11 +10,23 @@ export default function AppMenu({ active = 'dashboard' }) {
           <li className={active === 'dashboard' ? 'active' : ''}>
             <Link href="/">Dashboard</Link>
           </li>
+          <li className={active === 'obchodnici' ? 'active' : ''}>
+            <Link href="/obchodnici">Obchodníci</Link>
+          </li>
+        </ul>
+      </div>
+
+      <div className="menu-block">
+        <div className="menu-block-title">Operátoři</div>
+        <ul>
           <li className={active === 'operators' ? 'active' : ''}>
             <Link href="/operators">Příjem zakázek</Link>
           </li>
-          <li className={active === 'obchodnici' ? 'active' : ''}>
-            <Link href="/obchodnici">Obchodníci</Link>
+          <li className={active === 'operatorPauses' ? 'active' : ''}>
+            <Link href="/pauzy-operatoru">Pauzy operátorů</Link>
+          </li>
+          <li className={active === 'sla' ? 'active' : ''}>
+            <Link href="/vycet-sla">Výčet SLA</Link>
           </li>
         </ul>
       </div>
