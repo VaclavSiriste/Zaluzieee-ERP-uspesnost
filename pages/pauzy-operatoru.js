@@ -216,6 +216,14 @@ export default function OperatorPausesPage() {
     [summaryRows, hiddenSet]
   )
 
+  const summaryByOperator = useMemo(() => {
+    const map = new Map()
+    for (const row of visibleSummaryRows) {
+      map.set(String(row.operator_id), row)
+    }
+    return map
+  }, [visibleSummaryRows])
+
   const visibleTotals = useMemo(() => {
     return {
       operators: visibleBubbles.length,
@@ -373,7 +381,7 @@ export default function OperatorPausesPage() {
           <div className="pauses-grid">
             {visibleBubbles.map((bubble, index) => {
               const tone = toneForName(bubble.operator_name)
-              const maxPause = Math.max(...bubble.pauses.map((p) => p.duration_seconds), 1)
+              const summary = summaryByOperator.get(String(bubble.operator_id))
               return (
                 <article
                   className={`pauses-card pauses-card-tone-${tone}`}
@@ -386,7 +394,11 @@ export default function OperatorPausesPage() {
                     </div>
                     <div className="pauses-card-title">
                       <h3>{bubble.operator_name}</h3>
-                      <p>{bubble.pauses.length} typů pauz</p>
+                      <p>
+                        {summary
+                          ? `${formatDuration(summary.clean_seconds)} čistého času`
+                          : `${bubble.pauses.length} typů pauz`}
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -431,138 +443,104 @@ export default function OperatorPausesPage() {
                     </button>
                   </div>
 
-                  <ul className="pauses-type-list">
-                    {bubble.pauses.map((pause) => {
-                      const width = Math.max(8, Math.round((pause.duration_seconds / maxPause) * 100))
-                      return (
-                        <li key={`${bubble.operator_id}-${pause.pause_id || pause.pause_name}`}>
-                          <div className="pauses-type-row">
-                            <div className="pauses-type-meta">
-                              <span className="pauses-type-name">{pause.pause_name}</span>
-                              <div className="pauses-type-values">
-                                <DrilldownCount
-                                  count={pause.sessions}
-                                  onOpen={() =>
-                                    openDrilldown({
-                                      operator: bubble.operator_id,
-                                      operatorName: bubble.operator_name,
-                                      pause: pause.pause_id,
-                                      pauseName: pause.pause_name,
-                                      title: `${bubble.operator_name} — ${pause.pause_name}`
-                                    })
-                                  }
-                                />
-                                <span className="pauses-type-sep">·</span>
-                                <DrilldownCount
-                                  count={pause.duration_seconds}
-                                  text={formatDuration(pause.duration_seconds)}
-                                  title="Kliknutím zobrazíte seznam pauz"
-                                  onOpen={() =>
-                                    openDrilldown({
-                                      operator: bubble.operator_id,
-                                      operatorName: bubble.operator_name,
-                                      pause: pause.pause_id,
-                                      pauseName: pause.pause_name,
-                                      title: `${bubble.operator_name} — ${pause.pause_name}`
-                                    })
-                                  }
-                                />
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="pauses-bar-track"
-                              title="Zobrazit rozpad pauz"
-                              disabled={!pause.sessions}
-                              onClick={() =>
-                                openDrilldown({
-                                  operator: bubble.operator_id,
-                                  operatorName: bubble.operator_name,
-                                  pause: pause.pause_id,
-                                  pauseName: pause.pause_name,
-                                  title: `${bubble.operator_name} — ${pause.pause_name}`
-                                })
-                              }
-                            >
-                              <span className="pauses-bar-fill" style={{ width: `${width}%` }} />
-                            </button>
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
+                  <button
+                    type="button"
+                    className="pauses-breakdown-button"
+                    onClick={() =>
+                      openDrilldown({
+                        operator: bubble.operator_id,
+                        operatorName: bubble.operator_name,
+                        title: `${bubble.operator_name} — všechny pauzy`
+                      })
+                    }
+                    disabled={!bubble.sessions}
+                  >
+                    Rozkliknout detail pauz a metrik
+                  </button>
+
+                  {summary ? (
+                    <div className="pauses-summary-grid">
+                      <div className="pauses-summary-item">
+                        <span>Doba přihlášení</span>
+                        <strong>{formatDuration(summary.login_seconds)}</strong>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Administrativa</span>
+                        <strong>{formatDuration(summary.admin_seconds)}</strong>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Nečinnost</span>
+                        <strong>{formatDuration(summary.idle_seconds)}</strong>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Čistý čas</span>
+                        <strong>{formatDuration(summary.clean_seconds)}</strong>
+                        <small>{formatNumber(summary.clean_days, 2)} dne</small>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Odchozí hovory</span>
+                        <strong>{formatNumber(summary.outgoing_calls, 0)}</strong>
+                        <small>průměr {formatDuration(summary.outgoing_avg_seconds)}</small>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Příchozí hovory</span>
+                        <strong>{formatNumber(summary.incoming_calls, 0)}</strong>
+                        <small>průměr {formatDuration(summary.incoming_avg_seconds)}</small>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Hovory celkem</span>
+                        <strong>{formatNumber(summary.total_calls, 0)}</strong>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Maily</span>
+                        <strong>{formatNumber(summary.email_count, 0)}</strong>
+                        <small>průměr {formatDuration(summary.email_avg_seconds)}</small>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Požadavky / den</span>
+                        <strong>{formatNumber(summary.requests_per_day, 2)}</strong>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Vytíženost</span>
+                        <strong>{formatPercent(summary.utilization_pct)}</strong>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Dopadl hovor ANO</span>
+                        <strong>
+                          {summary.dopadl_hovor_ano == null
+                            ? '—'
+                            : formatNumber(summary.dopadl_hovor_ano, 0)}
+                        </strong>
+                        <small>{formatPercent(summary.success_dopadl_hovor_pct)}</small>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>ERP hovory ANO</span>
+                        <strong>
+                          {summary.erp_hovory_ano == null
+                            ? '—'
+                            : formatNumber(summary.erp_hovory_ano, 0)}
+                        </strong>
+                        <small>{formatPercent(summary.erp_vs_daktela_pct)}</small>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Domluveno zaměření ANO</span>
+                        <strong>
+                          {summary.domluveno_zamereni_ano == null
+                            ? '—'
+                            : formatNumber(summary.domluveno_zamereni_ano, 0)}
+                        </strong>
+                        <small>{formatPercent(summary.success_domluveni_zamereni_pct)}</small>
+                      </div>
+                      <div className="pauses-summary-item">
+                        <span>Úspěšnost zaměření z ERP</span>
+                        <strong>{formatPercent(summary.success_zamereni_z_erp_pct)}</strong>
+                      </div>
+                    </div>
+                  ) : null}
                 </article>
               )
             })}
           </div>
-
-          {!loading && !error && visibleSummaryRows.length > 0 ? (
-            <section className="sla-block">
-              <h2 className="sla-block-title">Sumarizace operátorů</h2>
-              <div className="table-scroll">
-                <table className="leaderboard-table">
-                  <thead>
-                    <tr>
-                      <th>Operátor</th>
-                      <th>Doba přihlášení</th>
-                      <th>Administrativa</th>
-                      <th>Nečinnost</th>
-                      <th>Čistý čas</th>
-                      <th>Čistý čas ve dnech</th>
-                      <th>Odchozí hovory</th>
-                      <th>Průměr odchozí</th>
-                      <th>Příchozí hovory</th>
-                      <th>Průměr příchozí</th>
-                      <th>Hovory celkem</th>
-                      <th>Maily</th>
-                      <th>Průměr mail</th>
-                      <th>Požadavky / den</th>
-                      <th>Vytíženost</th>
-                      <th>Dopadl hovor ANO</th>
-                      <th>ERP hovory ANO</th>
-                      <th>Domluveno zaměření ANO</th>
-                      <th>Úspěšnost / dopadl hovor</th>
-                      <th>Úspěšnost / domluvení zaměření</th>
-                      <th>ERP / Daktela</th>
-                      <th>Úspěšnost zaměření z ERP</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleSummaryRows.map((row) => (
-                      <tr key={`summary-${row.operator_id || row.operator_name}`}>
-                        <td>{row.operator_name}</td>
-                        <td>{formatDuration(row.login_seconds)}</td>
-                        <td>{formatDuration(row.admin_seconds)}</td>
-                        <td>{formatDuration(row.idle_seconds)}</td>
-                        <td>{formatDuration(row.clean_seconds)}</td>
-                        <td>{formatNumber(row.clean_days, 2)}</td>
-                        <td>{formatNumber(row.outgoing_calls, 0)}</td>
-                        <td>{formatDuration(row.outgoing_avg_seconds)}</td>
-                        <td>{formatNumber(row.incoming_calls, 0)}</td>
-                        <td>{formatDuration(row.incoming_avg_seconds)}</td>
-                        <td>{formatNumber(row.total_calls, 0)}</td>
-                        <td>{formatNumber(row.email_count, 0)}</td>
-                        <td>{formatDuration(row.email_avg_seconds)}</td>
-                        <td>{formatNumber(row.requests_per_day, 2)}</td>
-                        <td>{formatPercent(row.utilization_pct)}</td>
-                        <td>{row.dopadl_hovor_ano == null ? '—' : formatNumber(row.dopadl_hovor_ano, 0)}</td>
-                        <td>{row.erp_hovory_ano == null ? '—' : formatNumber(row.erp_hovory_ano, 0)}</td>
-                        <td>
-                          {row.domluveno_zamereni_ano == null
-                            ? '—'
-                            : formatNumber(row.domluveno_zamereni_ano, 0)}
-                        </td>
-                        <td>{formatPercent(row.success_dopadl_hovor_pct)}</td>
-                        <td>{formatPercent(row.success_domluveni_zamereni_pct)}</td>
-                        <td>{formatPercent(row.erp_vs_daktela_pct)}</td>
-                        <td>{formatPercent(row.success_zamereni_z_erp_pct)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ) : null}
         </div>
       </div>
 
