@@ -25,20 +25,72 @@ function formatDateTime(value) {
   })
 }
 
+function isPauseMetric(metric) {
+  return !metric || metric === 'pauses' || metric === 'admin' || metric === 'idle'
+}
+
+function isErpMetric(metric) {
+  return (
+    metric === 'dopadl_hovor_ano' ||
+    metric === 'dopadl_hovor_pocet' ||
+    metric === 'domluveno_zamereni_ano' ||
+    metric === 'domluveno_zamereni_pocet' ||
+    metric === 'erp_hovory_ano' ||
+    metric === 'erp_hovory_pocet'
+  )
+}
+
 function buildQueryParams(drilldown, filters, offset) {
-  return new URLSearchParams({
+  const metric = drilldown.metric || 'pauses'
+  const base = {
     period: filters.period,
     offset: String(offset),
     limit: '50',
     ...(filters.startDate ? { startDate: filters.startDate } : {}),
-    ...(filters.endDate ? { endDate: filters.endDate } : {}),
-    ...(drilldown.operator ? { operator: drilldown.operator } : {}),
-    ...(drilldown.pause ? { pause: drilldown.pause } : {}),
-    ...(drilldown.pauseName && !drilldown.pause ? { pauseName: drilldown.pauseName } : {}),
-    ...(!drilldown.operator && Array.isArray(drilldown.excludeOperators) && drilldown.excludeOperators.length
-      ? { excludeOperators: drilldown.excludeOperators.join(',') }
-      : {})
+    ...(filters.endDate ? { endDate: filters.endDate } : {})
+  }
+
+  if (isPauseMetric(metric)) {
+    return new URLSearchParams({
+      ...base,
+      ...(drilldown.operator ? { operator: drilldown.operator } : {}),
+      ...(drilldown.pause ? { pause: drilldown.pause } : {}),
+      ...(drilldown.pauseName && !drilldown.pause ? { pauseName: drilldown.pauseName } : {}),
+      ...(metric === 'admin' || metric === 'idle' ? { pauseGroup: metric } : {}),
+      ...(!drilldown.operator && Array.isArray(drilldown.excludeOperators) && drilldown.excludeOperators.length
+        ? { excludeOperators: drilldown.excludeOperators.join(',') }
+        : {})
+    })
+  }
+
+  if (isErpMetric(metric)) {
+    return new URLSearchParams({
+      ...base,
+      metric,
+      operatorName: drilldown.operatorName || ''
+    })
+  }
+
+  return new URLSearchParams({
+    ...base,
+    metric,
+    ...(drilldown.operator ? { operator: drilldown.operator } : {})
   })
+}
+
+function emptyLabel(metric) {
+  if (isPauseMetric(metric)) return 'Žádné pauzy v zvoleném období.'
+  if (isErpMetric(metric)) return 'Žádné leady v zvoleném období.'
+  if (metric === 'login') return 'Žádná přihlášení v zvoleném období.'
+  if (metric === 'emails') return 'Žádné maily v zvoleném období.'
+  if (metric === 'activity') return 'Žádné hovory ani maily v zvoleném období.'
+  return 'Žádné hovory v zvoleném období.'
+}
+
+function resolveEndpoint(metric, params) {
+  if (isPauseMetric(metric)) return `/api/operator-pause-sessions?${params}`
+  if (isErpMetric(metric)) return `/api/operator-erp-orders?${params}`
+  return `/api/operator-metric-sessions?${params}`
 }
 
 export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
@@ -67,22 +119,54 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
       setLoading(true)
       setError('')
       try {
+        const metric = drilldown.metric || 'pauses'
         const params = buildQueryParams(drilldown, filters, offset)
-        const response = await fetch(`/api/operator-pause-sessions?${params}`)
+        const response = await fetch(resolveEndpoint(metric, params))
         const payload = await response.json()
         if (!response.ok || payload.error) {
           throw new Error(payload.error || `HTTP ${response.status}`)
         }
 
-        setData((current) => {
-          if (offset === 0) return payload
-          return {
+        let normalized
+        if (isPauseMetric(metric)) {
+          normalized = {
             ...payload,
-            sessions: [...(current?.sessions || []), ...payload.sessions]
+            kind: 'sessions',
+            items: (payload.sessions || []).map((session) => ({
+              id: session.session,
+              kind: 'pause',
+              operator_name: session.operator_name,
+              label: session.pause_name,
+              detail: null,
+              start_time: session.start_time,
+              end_time: session.end_time,
+              duration_seconds: session.duration_seconds
+            }))
+          }
+        } else if (isErpMetric(metric)) {
+          normalized = {
+            ...payload,
+            kind: 'orders',
+            items: payload.orders || [],
+            duration_seconds: 0
+          }
+        } else {
+          normalized = {
+            ...payload,
+            kind: 'sessions',
+            items: payload.items || []
+          }
+        }
+
+        setData((current) => {
+          if (offset === 0) return normalized
+          return {
+            ...normalized,
+            items: [...(current?.items || []), ...(normalized.items || [])]
           }
         })
       } catch (err) {
-        setError(err.message || 'Nepodařilo se načíst pauzy')
+        setError(err.message || 'Nepodařilo se načíst rozpad')
         if (offset === 0) setData(null)
       } finally {
         setLoading(false)
@@ -109,8 +193,15 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
 
   if (!mounted || !open || !drilldown) return null
 
-  const title = drilldown.title || 'Rozpad pauz'
-  const hasMore = data ? data.sessions.length < data.total : false
+  const metric = drilldown.metric || 'pauses'
+  const title = drilldown.title || 'Rozpad metriky'
+  const hasMore = data ? data.items.length < data.total : false
+  const showEnd = isPauseMetric(metric) || metric === 'login'
+  const isOrders = data?.kind === 'orders' || isErpMetric(metric)
+  const erpValueHeader =
+    metric === 'domluveno_zamereni_ano' || metric === 'domluveno_zamereni_pocet'
+      ? 'Naplánován termín'
+      : 'Dopadl hovor'
 
   const panel = (
     <div className="drilldown-overlay" onClick={onClose} role="presentation">
@@ -127,10 +218,12 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
             {drilldown.operatorName ? (
               <p className="drilldown-subtitle">{drilldown.operatorName}</p>
             ) : null}
+            {drilldown.subtitle ? <p className="drilldown-subtitle">{drilldown.subtitle}</p> : null}
             {data ? (
               <p className="drilldown-meta">
-                Nalezeno <strong>{data.total.toLocaleString('cs-CZ')}</strong> pauz ·{' '}
-                {formatDuration(data.duration_seconds)}
+                Nalezeno <strong>{data.total.toLocaleString('cs-CZ')}</strong>
+                {isOrders ? ' leadů' : isPauseMetric(metric) ? ' pauz' : ' záznamů'}
+                {!isOrders ? ` · ${formatDuration(data.duration_seconds || 0)}` : null}
               </p>
             ) : null}
           </div>
@@ -142,7 +235,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
         {loading && !data ? (
           <div className="drilldown-status drilldown-loading">
             <div className="drilldown-spinner" />
-            Načítání pauz...
+            Načítání rozpadu...
           </div>
         ) : null}
         {error ? <div className="drilldown-status danger">{error}</div> : null}
@@ -150,30 +243,83 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
         {data ? (
           <div className="drilldown-body">
             <div className="drilldown-orders-pane">
-              {data.sessions.length === 0 ? (
-                <div className="drilldown-status">Žádné pauzy v zvoleném období.</div>
+              {data.items.length === 0 ? (
+                <div className="drilldown-status">{emptyLabel(metric)}</div>
+              ) : isOrders ? (
+                <div className="drilldown-table-wrap table-scroll">
+                  <table className="leaderboard-table drilldown-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Zákazník</th>
+                        <th>Kraj</th>
+                        <th>Operátor</th>
+                        <th>{erpValueHeader}</th>
+                        {metric === 'erp_hovory_ano' || metric === 'erp_hovory_pocet' ? (
+                          <th>Důvod ne</th>
+                        ) : null}
+                        <th>Datum navolání</th>
+                        <th>Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.items.map((order) => (
+                        <tr key={`order-${order.order_id}`}>
+                          <td>{order.order_id}</td>
+                          <td>
+                            <strong>{order.customer_name}</strong>
+                          </td>
+                          <td>{order.region}</td>
+                          <td>{order.operator_name}</td>
+                          <td>
+                            {order.metric_value ||
+                              order.naplanovan_termin_zamereni ||
+                              order.dopadl_hovor ||
+                              '—'}
+                          </td>
+                          {metric === 'erp_hovory_ano' || metric === 'erp_hovory_pocet' ? (
+                            <td>{order.proc_nedopadl_hovor || '—'}</td>
+                          ) : null}
+                          <td>{order.filter_date || '—'}</td>
+                          <td>
+                            <a
+                              href={order.detail_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="drilldown-detail-link"
+                            >
+                              Systeeem →
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <div className="drilldown-table-wrap table-scroll">
                   <table className="leaderboard-table drilldown-table">
                     <thead>
                       <tr>
                         <th>Operátor</th>
-                        <th>Typ pauzy</th>
+                        <th>Typ</th>
+                        <th>Detail</th>
                         <th>Začátek</th>
-                        <th>Konec</th>
+                        {showEnd ? <th>Konec</th> : null}
                         <th>Délka</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.sessions.map((session) => (
-                        <tr key={session.session}>
-                          <td>{session.operator_name}</td>
+                      {data.items.map((item) => (
+                        <tr key={`${item.kind}-${item.id}`}>
+                          <td>{item.operator_name}</td>
                           <td>
-                            <strong>{session.pause_name}</strong>
+                            <strong>{item.label}</strong>
                           </td>
-                          <td>{formatDateTime(session.start_time)}</td>
-                          <td>{formatDateTime(session.end_time)}</td>
-                          <td>{formatDuration(session.duration_seconds)}</td>
+                          <td>{item.detail || '—'}</td>
+                          <td>{formatDateTime(item.start_time)}</td>
+                          {showEnd ? <td>{formatDateTime(item.end_time)}</td> : null}
+                          <td>{formatDuration(item.duration_seconds)}</td>
                         </tr>
                       ))}
                     </tbody>

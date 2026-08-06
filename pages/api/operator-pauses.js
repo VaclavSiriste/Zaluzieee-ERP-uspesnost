@@ -4,7 +4,14 @@
  */
 
 import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
+import {
+  fetchDopadlHovorByOperator,
+  fetchDomluvenoZamereniByOperator,
+  fetchErpHovoryByOperator,
+  normalizeOperatorKey
+} from '@/lib/dopadl-hovor-metrics'
 import { resolveDateRange } from '@/lib/metrics-query'
+import { ADMIN_PAUSE_NAMES, IDLE_PAUSE_NAMES } from '@/lib/operator-metric-groups'
 import { PAUSE_DISPLAY_NAME_SQL } from '@/lib/pause-labels'
 import fs from 'fs/promises'
 import path from 'path'
@@ -20,29 +27,6 @@ const DURATION_SQL = `
     ELSE 0
   END
 `
-
-const ADMIN_PAUSE_NAMES = [
-  'inactive',
-  'konzultace s koordinátorem',
-  'konzultace s koordinatorom',
-  'nestandartní situace',
-  'nestandardní situace',
-  'wrap',
-  'zápis po hovoru',
-  'zapis po hovoru'
-]
-
-const IDLE_PAUSE_NAMES = [
-  'obědy',
-  'obedy',
-  'krátká pauza',
-  'kratka pauza',
-  'školení',
-  'skoleni',
-  'pohovor s tl',
-  'porada',
-  'porada '
-]
 
 const TRANSIENT_DB_ERRORS = [
   'ENOTFOUND',
@@ -145,7 +129,8 @@ export default async function handler(req, res) {
       WITH pause_base AS (
         SELECT
           ps."user" AS operator_id,
-          LOWER(TRIM((${PAUSE_DISPLAY_NAME_SQL}))) AS pause_name_lc,
+          LOWER(TRIM((${PAUSE_DISPLAY_NAME_SQL}))) AS pause_display_lc,
+          LOWER(TRIM(COALESCE(NULLIF(TRIM(p.title), ''), NULLIF(TRIM(p.name), ''), ps.pause, ''))) AS pause_raw_lc,
           (${DURATION_SQL})::bigint AS duration_seconds
         FROM pause_sessions ps
         LEFT JOIN pause p ON p.pause = ps.pause
@@ -159,7 +144,7 @@ export default async function handler(req, res) {
           COALESCE(
             SUM(
               CASE
-                WHEN pause_name_lc = ANY($3::text[]) THEN duration_seconds
+                WHEN pause_display_lc = ANY($3::text[]) OR pause_raw_lc = ANY($3::text[]) THEN duration_seconds
                 ELSE 0
               END
             ),
@@ -168,7 +153,7 @@ export default async function handler(req, res) {
           COALESCE(
             SUM(
               CASE
-                WHEN pause_name_lc = ANY($4::text[]) THEN duration_seconds
+                WHEN pause_display_lc = ANY($4::text[]) OR pause_raw_lc = ANY($4::text[]) THEN duration_seconds
                 ELSE 0
               END
             ),
@@ -271,6 +256,7 @@ export default async function handler(req, res) {
           ELSE 0
         END AS utilization_pct,
         NULL::int AS dopadl_hovor_ano,
+        NULL::int AS dopadl_hovor_pocet,
         NULL::int AS domluveno_zamereni_ano,
         NULL::int AS erp_hovory_ano
       FROM operators o
@@ -283,6 +269,28 @@ export default async function handler(req, res) {
       `,
       [start, end, adminPauseNames, idlePauseNames]
     )
+
+    let dopadlByKey = new Map()
+    let domluvenoByKey = new Map()
+    let erpHovoryByKey = new Map()
+    try {
+      const dopadlRows = await fetchDopadlHovorByOperator({ start, end })
+      dopadlByKey = new Map(dopadlRows.map((row) => [row.operator_key, row]))
+    } catch (error) {
+      console.warn('operator-pauses ERP dopadl_hovor:', error.message)
+    }
+    try {
+      const domluvenoRows = await fetchDomluvenoZamereniByOperator({ start, end })
+      domluvenoByKey = new Map(domluvenoRows.map((row) => [row.operator_key, row]))
+    } catch (error) {
+      console.warn('operator-pauses ERP domluveno_zamereni:', error.message)
+    }
+    try {
+      const erpHovoryRows = await fetchErpHovoryByOperator({ start, end })
+      erpHovoryByKey = new Map(erpHovoryRows.map((row) => [row.operator_key, row]))
+    } catch (error) {
+      console.warn('operator-pauses ERP erp_hovory:', error.message)
+    }
 
     const byOperator = new Map()
     for (const row of rows) {
@@ -323,16 +331,27 @@ export default async function handler(req, res) {
         const incomingCalls = Number(row.incoming_calls) || 0
         const totalCalls = Number(row.total_calls) || outgoingCalls + incomingCalls
         const emailCount = Number(row.email_count) || 0
-        const dopadlHovorAno =
-          row.dopadl_hovor_ano == null ? null : Number(row.dopadl_hovor_ano) || 0
-        const domluvenoZamereniAno =
-          row.domluveno_zamereni_ano == null ? null : Number(row.domluveno_zamereni_ano) || 0
-        const erpHovoryAno =
-          row.erp_hovory_ano == null ? null : Number(row.erp_hovory_ano) || 0
+        const dopadl = dopadlByKey.get(normalizeOperatorKey(row.operator_name))
+        const domluveno = domluvenoByKey.get(normalizeOperatorKey(row.operator_name))
+        const erpHovory = erpHovoryByKey.get(normalizeOperatorKey(row.operator_name))
+        const dopadlHovorAno = dopadl ? dopadl.dopadl_hovor_ano : 0
+        const dopadlHovorPocet = dopadl ? dopadl.dopadl_hovor_pocet : 0
+        const domluvenoZamereniAno = domluveno ? domluveno.domluveno_zamereni_ano : 0
+        const domluvenoZamereniPocet = domluveno ? domluveno.domluveno_zamereni_pocet : 0
+        const erpHovoryAno = erpHovory ? erpHovory.erp_hovory_ano : 0
+        const erpHovoryPocet = erpHovory ? erpHovory.erp_hovory_pocet : 0
+        const erpOperatorName =
+          erpHovory?.operator_name ||
+          dopadl?.operator_name ||
+          domluveno?.operator_name ||
+          row.operator_name
+        const domluvenoOperatorName = domluveno?.operator_name || erpOperatorName
 
         return {
           operator_id: row.operator_id,
           operator_name: row.operator_name,
+          erp_operator_name: erpOperatorName,
+          domluveno_operator_name: domluvenoOperatorName,
           login_seconds: Number(row.login_seconds) || 0,
           admin_seconds: Number(row.admin_seconds) || 0,
           idle_seconds: Number(row.idle_seconds) || 0,
@@ -349,24 +368,22 @@ export default async function handler(req, res) {
           requests_per_day: Number(row.requests_per_day) || 0,
           utilization_pct: Number(row.utilization_pct) || 0,
           dopadl_hovor_ano: dopadlHovorAno,
+          dopadl_hovor_pocet: dopadlHovorPocet,
           domluveno_zamereni_ano: domluvenoZamereniAno,
+          domluveno_zamereni_pocet: domluvenoZamereniPocet,
           erp_hovory_ano: erpHovoryAno,
+          erp_hovory_pocet: erpHovoryPocet,
           success_dopadl_hovor_pct:
-            dopadlHovorAno == null || outgoingCalls <= 0
-              ? null
-              : (dopadlHovorAno / outgoingCalls) * 100,
+            dopadlHovorPocet > 0 ? (dopadlHovorAno / dopadlHovorPocet) * 100 : null,
           success_domluveni_zamereni_pct:
-            domluvenoZamereniAno == null || totalCalls <= 0
-              ? null
-              : (domluvenoZamereniAno / totalCalls) * 100,
-          erp_vs_daktela_pct:
-            erpHovoryAno == null || totalCalls <= 0
-              ? null
-              : (erpHovoryAno / totalCalls) * 100,
+            domluvenoZamereniPocet > 0
+              ? (domluvenoZamereniAno / domluvenoZamereniPocet) * 100
+              : null,
+          success_erp_hovory_pct:
+            erpHovoryPocet > 0 ? (erpHovoryAno / erpHovoryPocet) * 100 : null,
+          erp_vs_daktela_pct: totalCalls > 0 ? (erpHovoryAno / totalCalls) * 100 : null,
           success_zamereni_z_erp_pct:
-            domluvenoZamereniAno == null || erpHovoryAno == null || erpHovoryAno <= 0
-              ? null
-              : (domluvenoZamereniAno / erpHovoryAno) * 100
+            erpHovoryAno > 0 ? (domluvenoZamereniAno / erpHovoryAno) * 100 : null
         }
       }),
       totals: {

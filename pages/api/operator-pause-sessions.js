@@ -5,7 +5,8 @@
 
 import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
 import { resolveDateRange } from '@/lib/metrics-query'
-import { PAUSE_DISPLAY_NAME_SQL } from '@/lib/pause-labels'
+import { pauseGroupNames } from '@/lib/operator-metric-groups'
+import { PAUSE_DISPLAY_NAME_SQL, PAUSE_RAW_NAME_SQL } from '@/lib/pause-labels'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
@@ -79,6 +80,8 @@ export default async function handler(req, res) {
   const operator = cleanParam(req.query.operator)
   const pause = cleanParam(req.query.pause)
   const pauseName = cleanParam(req.query.pauseName)
+  const pauseGroup = cleanParam(req.query.pauseGroup).toLowerCase()
+  const groupNames = pauseGroupNames(pauseGroup)
   const excludeOperators = String(req.query.excludeOperators || '')
     .split(',')
     .map((item) => item.trim())
@@ -112,6 +115,13 @@ export default async function handler(req, res) {
     } else if (pauseName) {
       where.push(`(${PAUSE_DISPLAY_NAME_SQL}) = $${paramIndex}`)
       params.push(pauseName)
+      paramIndex += 1
+    } else if (groupNames.length) {
+      where.push(`(
+        LOWER(TRIM((${PAUSE_DISPLAY_NAME_SQL}))) = ANY($${paramIndex}::text[])
+        OR LOWER(TRIM((${PAUSE_RAW_NAME_SQL}))) = ANY($${paramIndex}::text[])
+      )`)
+      params.push(groupNames)
       paramIndex += 1
     }
 

@@ -34,7 +34,7 @@ button {
   cursor: pointer;
 }
 
-button:not(.drilldown-close):not(.drilldown-load-more):not(.drilldown-chip):not(.drilldown-region-card):not(.filter-assistant-trigger):not(.filter-assistant-close):not(.period-chip):not(.login-primary-button):not(.login-secondary-button):not(.pauses-stat):not(.pauses-bar-track):not(.pauses-directory-btn):not(.pauses-kpi-button):not(.pauses-card-hide):not(.operator-directory-action):not(.operator-directory-toggle):hover {
+button:not(.drilldown-close):not(.drilldown-load-more):not(.drilldown-chip):not(.drilldown-region-card):not(.filter-assistant-trigger):not(.filter-assistant-close):not(.period-chip):not(.login-primary-button):not(.login-secondary-button):not(.pauses-stat):not(.pauses-bar-track):not(.pauses-directory-btn):not(.pauses-kpi-button):not(.pauses-card-hide):not(.pauses-summary-item):not(.operator-directory-action):not(.operator-directory-toggle):hover {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   background-color: #e9edff;
   color: #1e2a52;
@@ -1661,6 +1661,8 @@ h6 {
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  text-align: left;
+  color: inherit;
 }
 
 .pauses-summary-item span {
@@ -1681,6 +1683,30 @@ h6 {
   color: #64748b;
   font-size: 12px;
   font-weight: 600;
+}
+
+.pauses-summary-clickable:not(:disabled) {
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.pauses-summary-clickable:not(:disabled):hover,
+.pauses-summary-clickable:not(:disabled):focus-visible {
+  border-color: #a5b4fc;
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+  box-shadow: none;
+  transform: translateY(-1px);
+  color: inherit;
+}
+
+.pauses-summary-clickable:not(:disabled):hover small,
+.pauses-summary-clickable:not(:disabled):focus-visible small {
+  color: #4338ca;
+}
+
+.pauses-summary-item:disabled {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .pauses-stat {
@@ -1718,33 +1744,6 @@ h6 {
 .pauses-stat:disabled {
   cursor: default;
   opacity: 0.7;
-}
-
-.pauses-breakdown-button {
-  width: 100%;
-  margin-bottom: 12px;
-  border: 1px dashed #c7d2fe;
-  border-radius: 14px;
-  padding: 10px 12px;
-  background: #f8faff;
-  color: #4338ca;
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.pauses-breakdown-button:hover,
-.pauses-breakdown-button:focus-visible {
-  background: #eef2ff;
-  border-color: #a5b4fc;
-  box-shadow: none;
-  transform: none;
-  color: #312e81;
-}
-
-.pauses-breakdown-button:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 .pauses-type-list {
