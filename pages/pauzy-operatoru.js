@@ -297,11 +297,11 @@ export default function OperatorPausesPage() {
         <div className="dashboard-main">
           <header className="pauses-hero">
             <div className="pauses-hero-copy">
-              <p className="pauses-kicker">Daktela · pouze pause_sessions</p>
+              <p className="pauses-kicker">Daktela + ERP · časový filtr</p>
               <h1>Pauzy operátorů</h1>
               <p>
-                Přehled pauz a metrik z call centra. Časové filtry mění data stejně jako jinde —
-                kliknutím na metriku otevřete její rozpad.
+                Všechny metriky na kartách (Daktela i ERP) se řídí jen časovým filtrem —
+                týden / měsíc / rok nebo vlastní datum. Kliknutím otevřete rozpad.
               </p>
               <button
                 type="button"
@@ -623,23 +623,41 @@ export default function OperatorPausesPage() {
                       <button
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.erp_hovory_ano && !summary.erp_hovory_pocet}
+                        disabled={!summary.erp_hovory_pocet}
                         onClick={() =>
                           openMetricDrilldown(
                             bubble,
-                            'erp_hovory_ano',
-                            'ERP hovory ANO',
-                            'Looker: dopadl_hovor = Ano + filtry Důvod ne · vyloučeni Matěj Kalkus, Natálie Sawczuková',
+                            'erp_hovory_pocet',
+                            'ERP hovory',
+                            'Looker: dopadl_hovor = Ano NEBO Ne + filtry Důvod ne · vyloučeni Matěj Kalkus, Natálie Sawczuková',
                             { operatorName: summary.erp_operator_name || bubble.operator_name }
                           )
                         }
                       >
-                        <span>ERP hovory ANO</span>
+                        <span>ERP hovory</span>
+                        <strong>{formatNumber(summary.erp_hovory_pocet, 0)}</strong>
+                        <small>Ano + Ne · filtry Důvod ne</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.erp_hovory_ano}
+                        onClick={() =>
+                          openMetricDrilldown(
+                            bubble,
+                            'erp_hovory_ano',
+                            'ANO',
+                            'Looker kolonka ANO: dopadl_hovor = Ano + filtry Důvod ne · vyloučeni Matěj Kalkus, Natálie Sawczuková',
+                            { operatorName: summary.erp_operator_name || bubble.operator_name }
+                          )
+                        }
+                      >
+                        <span>ANO</span>
                         <strong>{formatNumber(summary.erp_hovory_ano, 0)}</strong>
                         <small>
                           {formatPercent(summary.success_erp_hovory_pct)}
                           {summary.erp_hovory_pocet
-                            ? ` · z ${formatNumber(summary.erp_hovory_pocet, 0)}`
+                            ? ` · z ${formatNumber(summary.erp_hovory_pocet, 0)} ERP`
                             : ''}
                           {summary.erp_vs_daktela_pct != null
                             ? ` · vs Daktela ${formatPercent(summary.erp_vs_daktela_pct)}`
@@ -678,11 +696,11 @@ export default function OperatorPausesPage() {
                         type="button"
                         className="pauses-summary-item"
                         disabled={summary.success_zamereni_z_erp_pct == null}
-                        title="Domluveno zaměření ANO / ERP hovory ANO"
+                        title="Domluveno zaměření ANO / ERP hovory"
                       >
                         <span>Úspěšnost zaměření z ERP</span>
                         <strong>{formatPercent(summary.success_zamereni_z_erp_pct)}</strong>
-                        <small>domluveno / ERP hovory</small>
+                        <small>domluveno ANO / ERP hovory</small>
                       </button>
                     </div>
                   ) : null}

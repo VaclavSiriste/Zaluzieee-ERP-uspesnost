@@ -383,7 +383,7 @@ export default async function handler(req, res) {
             erpHovoryPocet > 0 ? (erpHovoryAno / erpHovoryPocet) * 100 : null,
           erp_vs_daktela_pct: totalCalls > 0 ? (erpHovoryAno / totalCalls) * 100 : null,
           success_zamereni_z_erp_pct:
-            erpHovoryAno > 0 ? (domluvenoZamereniAno / erpHovoryAno) * 100 : null
+            erpHovoryPocet > 0 ? (domluvenoZamereniAno / erpHovoryPocet) * 100 : null
         }
       }),
       totals: {
