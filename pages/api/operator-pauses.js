@@ -3,9 +3,11 @@
  * GET /api/operator-pauses?period=week|month|ytd|custom&startDate=&endDate=
  */
 
-import { getDaktelaPool } from '@/lib/db-esm'
+import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
 import { resolveDateRange } from '@/lib/metrics-query'
 import { PAUSE_DISPLAY_NAME_SQL } from '@/lib/pause-labels'
+import fs from 'fs/promises'
+import path from 'path'
 
 const DURATION_SQL = `
   CASE
@@ -18,6 +20,86 @@ const DURATION_SQL = `
     ELSE 0
   END
 `
+
+const ADMIN_PAUSE_NAMES = [
+  'inactive',
+  'konzultace s koordinátorem',
+  'konzultace s koordinatorom',
+  'nestandartní situace',
+  'nestandardní situace',
+  'wrap',
+  'zápis po hovoru',
+  'zapis po hovoru'
+]
+
+const IDLE_PAUSE_NAMES = [
+  'obědy',
+  'obedy',
+  'krátká pauza',
+  'kratka pauza',
+  'školení',
+  'skoleni',
+  'pohovor s tl',
+  'porada',
+  'porada '
+]
+
+const TRANSIENT_DB_ERRORS = [
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'Connection terminated unexpectedly',
+  'terminating connection due to administrator command'
+]
+
+const CACHE_DIR = path.join(process.cwd(), '.runtime-cache')
+const CACHE_FILE = path.join(CACHE_DIR, 'operator-pauses-last-success.json')
+
+function isTransientDbError(error) {
+  const message = String(error?.message || '')
+  return TRANSIENT_DB_ERRORS.some((needle) => message.includes(needle))
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function queryWithRetry(sql, params = [], attempts = 4) {
+  let lastError
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const pool = getDaktelaPool()
+      if (!pool) throw new Error('Chybí DAKTELA_DB_CONNECTION_STRING (Supabase Pohoda CC)')
+      return await pool.query(sql, params)
+    } catch (error) {
+      lastError = error
+      if (!isTransientDbError(error) || i === attempts - 1) throw error
+      const shouldUseFallback = String(error?.message || '').includes('ENOTFOUND')
+      await resetDaktelaPool({ useFallbackOnNext: shouldUseFallback })
+      await sleep(250 * (i + 1))
+    }
+  }
+  throw lastError
+}
+
+async function writeCache(payload) {
+  try {
+    await fs.mkdir(CACHE_DIR, { recursive: true })
+    await fs.writeFile(CACHE_FILE, JSON.stringify(payload), 'utf8')
+  } catch (error) {
+    console.warn('operator-pauses cache write failed:', error.message)
+  }
+}
+
+async function readCache() {
+  try {
+    const raw = await fs.readFile(CACHE_FILE, 'utf8')
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -35,8 +117,10 @@ export default async function handler(req, res) {
 
   try {
     const { start, end } = resolveDateRange({ startDate, endDate, period })
+    const adminPauseNames = ADMIN_PAUSE_NAMES.map((v) => v.toLowerCase())
+    const idlePauseNames = IDLE_PAUSE_NAMES.map((v) => v.toLowerCase())
 
-    const { rows } = await pool.query(
+    const { rows } = await queryWithRetry(
       `
       SELECT
         COALESCE(NULLIF(TRIM(u.title), ''), NULLIF(TRIM(u.name), ''), ps."user", 'Neznámý') AS operator_name,
@@ -54,6 +138,150 @@ export default async function handler(req, res) {
       ORDER BY operator_name ASC, duration_seconds DESC
       `,
       [start, end]
+    )
+
+    const summaryResult = await queryWithRetry(
+      `
+      WITH pause_base AS (
+        SELECT
+          ps."user" AS operator_id,
+          LOWER(TRIM((${PAUSE_DISPLAY_NAME_SQL}))) AS pause_name_lc,
+          (${DURATION_SQL})::bigint AS duration_seconds
+        FROM pause_sessions ps
+        LEFT JOIN pause p ON p.pause = ps.pause
+        WHERE ps.start_time >= $1
+          AND ps.start_time <= $2
+      ),
+      pause_agg AS (
+        SELECT
+          operator_id,
+          COALESCE(SUM(duration_seconds), 0)::bigint AS pause_total_seconds,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN pause_name_lc = ANY($3::text[]) THEN duration_seconds
+                ELSE 0
+              END
+            ),
+            0
+          )::bigint AS admin_seconds,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN pause_name_lc = ANY($4::text[]) THEN duration_seconds
+                ELSE 0
+              END
+            ),
+            0
+          )::bigint AS idle_seconds
+        FROM pause_base
+        GROUP BY operator_id
+      ),
+      login_agg AS (
+        SELECT
+          ls."user" AS operator_id,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN ls.duration IS NOT NULL AND ls.duration > 0 THEN ls.duration
+                WHEN ls.start_time IS NOT NULL THEN GREATEST(
+                  0,
+                  EXTRACT(EPOCH FROM (COALESCE(ls.end_time, NOW()) - ls.start_time))::bigint
+                )
+                ELSE 0
+              END
+            ),
+            0
+          )::bigint AS login_seconds
+        FROM login_sessions ls
+        WHERE ls.start_time >= $1
+          AND ls.start_time <= $2
+        GROUP BY ls."user"
+      ),
+      call_agg AS (
+        SELECT
+          c."user" AS operator_id,
+          COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'OUT')::int AS outgoing_calls,
+          COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'IN')::int AS incoming_calls,
+          AVG(NULLIF(c.duration, 0)) FILTER (
+            WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
+              AND c.duration IS NOT NULL
+          )::float8 AS outgoing_avg_seconds,
+          AVG(NULLIF(c.duration, 0)) FILTER (
+            WHERE UPPER(COALESCE(c.direction, '')) = 'IN'
+              AND c.duration IS NOT NULL
+          )::float8 AS incoming_avg_seconds
+        FROM call c
+        WHERE c.call_time >= $1
+          AND c.call_time <= $2
+        GROUP BY c."user"
+      ),
+      email_agg AS (
+        SELECT
+          e."user" AS operator_id,
+          COUNT(*)::int AS email_count,
+          AVG(NULLIF(e.wait_time, 0))::float8 AS email_avg_seconds
+        FROM email e
+        WHERE e.time >= $1
+          AND e.time <= $2
+        GROUP BY e."user"
+      ),
+      operators AS (
+        SELECT operator_id FROM pause_agg
+        UNION
+        SELECT operator_id FROM login_agg
+        UNION
+        SELECT operator_id FROM call_agg
+        UNION
+        SELECT operator_id FROM email_agg
+      )
+      SELECT
+        o.operator_id,
+        COALESCE(NULLIF(TRIM(u.title), ''), NULLIF(TRIM(u.name), ''), o.operator_id, 'Neznámý') AS operator_name,
+        COALESCE(l.login_seconds, 0)::bigint AS login_seconds,
+        COALESCE(p.admin_seconds, 0)::bigint AS admin_seconds,
+        COALESCE(p.idle_seconds, 0)::bigint AS idle_seconds,
+        GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::bigint AS clean_seconds,
+        (GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) AS clean_hours,
+        ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0) AS clean_days,
+        COALESCE(c.outgoing_calls, 0)::int AS outgoing_calls,
+        COALESCE(c.incoming_calls, 0)::int AS incoming_calls,
+        COALESCE(c.outgoing_avg_seconds, 0)::float8 AS outgoing_avg_seconds,
+        COALESCE(c.incoming_avg_seconds, 0)::float8 AS incoming_avg_seconds,
+        (COALESCE(c.outgoing_calls, 0) + COALESCE(c.incoming_calls, 0))::int AS total_calls,
+        COALESCE(e.email_count, 0)::int AS email_count,
+        COALESCE(e.email_avg_seconds, 0)::float8 AS email_avg_seconds,
+        CASE
+          WHEN ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0) > 0
+            THEN ((COALESCE(c.outgoing_calls, 0) + COALESCE(c.incoming_calls, 0) + COALESCE(e.email_count, 0))::float8
+              / ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0))
+          ELSE 0
+        END AS requests_per_day,
+        CASE
+          WHEN (GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) > 0
+            THEN (
+              (
+                COALESCE(p.admin_seconds, 0)
+                + (COALESCE(c.outgoing_calls, 0) * COALESCE(c.outgoing_avg_seconds, 0))
+                + (COALESCE(c.incoming_calls, 0) * COALESCE(c.incoming_avg_seconds, 0))
+                + (COALESCE(e.email_count, 0) * COALESCE(e.email_avg_seconds, 0))
+              )
+              / ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3600.0)
+            ) * 100.0
+          ELSE 0
+        END AS utilization_pct,
+        NULL::int AS dopadl_hovor_ano,
+        NULL::int AS domluveno_zamereni_ano,
+        NULL::int AS erp_hovory_ano
+      FROM operators o
+      LEFT JOIN "user" u ON u."user" = o.operator_id
+      LEFT JOIN pause_agg p ON p.operator_id = o.operator_id
+      LEFT JOIN login_agg l ON l.operator_id = o.operator_id
+      LEFT JOIN call_agg c ON c.operator_id = o.operator_id
+      LEFT JOIN email_agg e ON e.operator_id = o.operator_id
+      ORDER BY operator_name ASC
+      `,
+      [start, end, adminPauseNames, idlePauseNames]
     )
 
     const byOperator = new Map()
@@ -85,19 +313,99 @@ export default async function handler(req, res) {
       (a, b) => b.duration_seconds - a.duration_seconds
     )
 
-    return res.status(200).json({
+    const payload = {
       period,
       start: start.toISOString(),
       end: end.toISOString(),
       bubbles,
+      summary: summaryResult.rows.map((row) => {
+        const outgoingCalls = Number(row.outgoing_calls) || 0
+        const incomingCalls = Number(row.incoming_calls) || 0
+        const totalCalls = Number(row.total_calls) || outgoingCalls + incomingCalls
+        const emailCount = Number(row.email_count) || 0
+        const dopadlHovorAno =
+          row.dopadl_hovor_ano == null ? null : Number(row.dopadl_hovor_ano) || 0
+        const domluvenoZamereniAno =
+          row.domluveno_zamereni_ano == null ? null : Number(row.domluveno_zamereni_ano) || 0
+        const erpHovoryAno =
+          row.erp_hovory_ano == null ? null : Number(row.erp_hovory_ano) || 0
+
+        return {
+          operator_id: row.operator_id,
+          operator_name: row.operator_name,
+          login_seconds: Number(row.login_seconds) || 0,
+          admin_seconds: Number(row.admin_seconds) || 0,
+          idle_seconds: Number(row.idle_seconds) || 0,
+          clean_seconds: Number(row.clean_seconds) || 0,
+          clean_hours: Number(row.clean_hours) || 0,
+          clean_days: Number(row.clean_days) || 0,
+          outgoing_calls: outgoingCalls,
+          incoming_calls: incomingCalls,
+          outgoing_avg_seconds: Number(row.outgoing_avg_seconds) || 0,
+          incoming_avg_seconds: Number(row.incoming_avg_seconds) || 0,
+          total_calls: totalCalls,
+          email_count: emailCount,
+          email_avg_seconds: Number(row.email_avg_seconds) || 0,
+          requests_per_day: Number(row.requests_per_day) || 0,
+          utilization_pct: Number(row.utilization_pct) || 0,
+          dopadl_hovor_ano: dopadlHovorAno,
+          domluveno_zamereni_ano: domluvenoZamereniAno,
+          erp_hovory_ano: erpHovoryAno,
+          success_dopadl_hovor_pct:
+            dopadlHovorAno == null || outgoingCalls <= 0
+              ? null
+              : (dopadlHovorAno / outgoingCalls) * 100,
+          success_domluveni_zamereni_pct:
+            domluvenoZamereniAno == null || totalCalls <= 0
+              ? null
+              : (domluvenoZamereniAno / totalCalls) * 100,
+          erp_vs_daktela_pct:
+            erpHovoryAno == null || totalCalls <= 0
+              ? null
+              : (erpHovoryAno / totalCalls) * 100,
+          success_zamereni_z_erp_pct:
+            domluvenoZamereniAno == null || erpHovoryAno == null || erpHovoryAno <= 0
+              ? null
+              : (domluvenoZamereniAno / erpHovoryAno) * 100
+        }
+      }),
       totals: {
         operators: bubbles.length,
         sessions: bubbles.reduce((sum, b) => sum + b.sessions, 0),
         duration_seconds: bubbles.reduce((sum, b) => sum + b.duration_seconds, 0)
       }
-    })
+    }
+
+    await writeCache(payload)
+    return res.status(200).json(payload)
   } catch (error) {
     console.error('operator-pauses:', error.message)
+    if (isTransientDbError(error)) {
+      const cached = await readCache()
+      if (cached) {
+        return res.status(200).json({
+          ...cached,
+          stale: true,
+          stale_reason: error.message,
+          stale_generated_at: new Date().toISOString()
+        })
+      }
+      return res.status(200).json({
+        period,
+        start: null,
+        end: null,
+        bubbles: [],
+        summary: [],
+        totals: {
+          operators: 0,
+          sessions: 0,
+          duration_seconds: 0
+        },
+        stale: true,
+        stale_reason: error.message,
+        stale_generated_at: new Date().toISOString()
+      })
+    }
     return res.status(500).json({ error: error.message || 'Chyba načtení pauz' })
   }
 }

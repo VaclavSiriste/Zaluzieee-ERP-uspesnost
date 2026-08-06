@@ -3,7 +3,7 @@
  * GET /api/operator-pause-sessions?period=&startDate=&endDate=&operator=&pause=&limit=&offset=
  */
 
-import { getDaktelaPool } from '@/lib/db-esm'
+import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
 import { resolveDateRange } from '@/lib/metrics-query'
 import { PAUSE_DISPLAY_NAME_SQL } from '@/lib/pause-labels'
 
@@ -21,6 +21,42 @@ const DURATION_SQL = `
     ELSE 0
   END
 `
+
+const TRANSIENT_DB_ERRORS = [
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'Connection terminated unexpectedly',
+  'terminating connection due to administrator command'
+]
+
+function isTransientDbError(error) {
+  const message = String(error?.message || '')
+  return TRANSIENT_DB_ERRORS.some((needle) => message.includes(needle))
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function queryWithRetry(sql, params = [], attempts = 4) {
+  let lastError
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const pool = getDaktelaPool()
+      if (!pool) throw new Error('Chybí DAKTELA_DB_CONNECTION_STRING (Supabase Pohoda CC)')
+      return await pool.query(sql, params)
+    } catch (error) {
+      lastError = error
+      if (!isTransientDbError(error) || i === attempts - 1) throw error
+      const shouldUseFallback = String(error?.message || '').includes('ENOTFOUND')
+      await resetDaktelaPool({ useFallbackOnNext: shouldUseFallback })
+      await sleep(250 * (i + 1))
+    }
+  }
+  throw lastError
+}
 
 function cleanParam(value) {
   if (typeof value !== 'string') return ''
@@ -81,7 +117,7 @@ export default async function handler(req, res) {
 
     const whereSql = where.join(' AND ')
 
-    const countResult = await pool.query(
+    const countResult = await queryWithRetry(
       `
       SELECT COUNT(*)::int AS total,
              COALESCE(SUM(${DURATION_SQL}), 0)::bigint AS duration_seconds
@@ -93,7 +129,7 @@ export default async function handler(req, res) {
     )
 
     const listParams = [...params, parsedLimit, parsedOffset]
-    const listResult = await pool.query(
+    const listResult = await queryWithRetry(
       `
       SELECT
         ps.session,

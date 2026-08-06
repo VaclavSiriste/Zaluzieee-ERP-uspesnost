@@ -16,6 +16,19 @@ function formatDuration(totalSeconds) {
   return `${sec} s`
 }
 
+function formatNumber(value, digits = 2) {
+  const n = Number(value) || 0
+  return n.toLocaleString('cs-CZ', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits
+  })
+}
+
+function formatPercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return `${formatNumber(value, 2)} %`
+}
+
 function initials(name) {
   const parts = String(name || '')
     .trim()
@@ -61,6 +74,7 @@ export default function OperatorPausesPage() {
   const [directoryOpen, setDirectoryOpen] = useState(false)
   const [directoryOperators, setDirectoryOperators] = useState([])
   const [hiddenIds, setHiddenIds] = useState([])
+  const [summaryRows, setSummaryRows] = useState([])
 
   const filters = useMemo(
     () => ({
@@ -135,6 +149,7 @@ export default function OperatorPausesPage() {
       const data = await response.json()
       if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
       setBubbles(data.bubbles || [])
+      setSummaryRows(data.summary || [])
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('Načítání trvalo příliš dlouho. Zkuste obnovit stránku.')
@@ -142,6 +157,7 @@ export default function OperatorPausesPage() {
         setError(err.message || 'Nepodařilo se načíst pauzy')
       }
       setBubbles([])
+      setSummaryRows([])
     } finally {
       setLoading(false)
     }
@@ -193,6 +209,11 @@ export default function OperatorPausesPage() {
   const visibleBubbles = useMemo(
     () => bubbles.filter((bubble) => !hiddenSet.has(String(bubble.operator_id))),
     [bubbles, hiddenSet]
+  )
+
+  const visibleSummaryRows = useMemo(
+    () => summaryRows.filter((row) => !hiddenSet.has(String(row.operator_id))),
+    [summaryRows, hiddenSet]
   )
 
   const visibleTotals = useMemo(() => {
@@ -474,6 +495,74 @@ export default function OperatorPausesPage() {
               )
             })}
           </div>
+
+          {!loading && !error && visibleSummaryRows.length > 0 ? (
+            <section className="sla-block">
+              <h2 className="sla-block-title">Sumarizace operátorů</h2>
+              <div className="table-scroll">
+                <table className="leaderboard-table">
+                  <thead>
+                    <tr>
+                      <th>Operátor</th>
+                      <th>Doba přihlášení</th>
+                      <th>Administrativa</th>
+                      <th>Nečinnost</th>
+                      <th>Čistý čas</th>
+                      <th>Čistý čas ve dnech</th>
+                      <th>Odchozí hovory</th>
+                      <th>Průměr odchozí</th>
+                      <th>Příchozí hovory</th>
+                      <th>Průměr příchozí</th>
+                      <th>Hovory celkem</th>
+                      <th>Maily</th>
+                      <th>Průměr mail</th>
+                      <th>Požadavky / den</th>
+                      <th>Vytíženost</th>
+                      <th>Dopadl hovor ANO</th>
+                      <th>ERP hovory ANO</th>
+                      <th>Domluveno zaměření ANO</th>
+                      <th>Úspěšnost / dopadl hovor</th>
+                      <th>Úspěšnost / domluvení zaměření</th>
+                      <th>ERP / Daktela</th>
+                      <th>Úspěšnost zaměření z ERP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleSummaryRows.map((row) => (
+                      <tr key={`summary-${row.operator_id || row.operator_name}`}>
+                        <td>{row.operator_name}</td>
+                        <td>{formatDuration(row.login_seconds)}</td>
+                        <td>{formatDuration(row.admin_seconds)}</td>
+                        <td>{formatDuration(row.idle_seconds)}</td>
+                        <td>{formatDuration(row.clean_seconds)}</td>
+                        <td>{formatNumber(row.clean_days, 2)}</td>
+                        <td>{formatNumber(row.outgoing_calls, 0)}</td>
+                        <td>{formatDuration(row.outgoing_avg_seconds)}</td>
+                        <td>{formatNumber(row.incoming_calls, 0)}</td>
+                        <td>{formatDuration(row.incoming_avg_seconds)}</td>
+                        <td>{formatNumber(row.total_calls, 0)}</td>
+                        <td>{formatNumber(row.email_count, 0)}</td>
+                        <td>{formatDuration(row.email_avg_seconds)}</td>
+                        <td>{formatNumber(row.requests_per_day, 2)}</td>
+                        <td>{formatPercent(row.utilization_pct)}</td>
+                        <td>{row.dopadl_hovor_ano == null ? '—' : formatNumber(row.dopadl_hovor_ano, 0)}</td>
+                        <td>{row.erp_hovory_ano == null ? '—' : formatNumber(row.erp_hovory_ano, 0)}</td>
+                        <td>
+                          {row.domluveno_zamereni_ano == null
+                            ? '—'
+                            : formatNumber(row.domluveno_zamereni_ano, 0)}
+                        </td>
+                        <td>{formatPercent(row.success_dopadl_hovor_pct)}</td>
+                        <td>{formatPercent(row.success_domluveni_zamereni_pct)}</td>
+                        <td>{formatPercent(row.erp_vs_daktela_pct)}</td>
+                        <td>{formatPercent(row.success_zamereni_z_erp_pct)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
 
