@@ -138,6 +138,22 @@ export default async function handler(req, res) {
       params
     )
 
+    const byTypeResult = await queryWithRetry(
+      `
+      SELECT
+        ps.pause AS pause_id,
+        (${PAUSE_DISPLAY_NAME_SQL}) AS pause_name,
+        COUNT(*)::int AS sessions,
+        COALESCE(SUM(${DURATION_SQL}), 0)::bigint AS duration_seconds
+      FROM pause_sessions ps
+      LEFT JOIN pause p ON p.pause = ps.pause
+      WHERE ${whereSql}
+      GROUP BY ps.pause, (${PAUSE_DISPLAY_NAME_SQL})
+      ORDER BY duration_seconds DESC, pause_name ASC
+      `,
+      params
+    )
+
     const listParams = [...params, parsedLimit, parsedOffset]
     const listResult = await queryWithRetry(
       `
@@ -168,6 +184,12 @@ export default async function handler(req, res) {
       duration_seconds: Number(countResult.rows[0]?.duration_seconds) || 0,
       limit: parsedLimit,
       offset: parsedOffset,
+      by_type: byTypeResult.rows.map((row) => ({
+        pause_id: row.pause_id,
+        pause_name: row.pause_name || row.pause_id || 'Neznámý',
+        sessions: Number(row.sessions) || 0,
+        duration_seconds: Number(row.duration_seconds) || 0
+      })),
       sessions: listResult.rows.map((row) => ({
         session: row.session,
         operator_id: row.operator_id,

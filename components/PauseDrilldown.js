@@ -40,7 +40,7 @@ function isErpMetric(metric) {
   )
 }
 
-function buildQueryParams(drilldown, filters, offset) {
+function buildQueryParams(drilldown, filters, offset, typeFilter = null) {
   const metric = drilldown.metric || 'pauses'
   const base = {
     period: filters.period,
@@ -51,11 +51,14 @@ function buildQueryParams(drilldown, filters, offset) {
   }
 
   if (isPauseMetric(metric)) {
+    const pauseId = typeFilter?.pause || drilldown.pause || ''
+    const pauseNameRaw = typeFilter?.pauseName || drilldown.pauseName || ''
+    const pauseName = pauseId ? '' : pauseNameRaw
     return new URLSearchParams({
       ...base,
       ...(drilldown.operator ? { operator: drilldown.operator } : {}),
-      ...(drilldown.pause ? { pause: drilldown.pause } : {}),
-      ...(drilldown.pauseName && !drilldown.pause ? { pauseName: drilldown.pauseName } : {}),
+      ...(pauseId ? { pause: pauseId } : {}),
+      ...(pauseName ? { pauseName } : {}),
       ...(metric === 'admin' || metric === 'idle' ? { pauseGroup: metric } : {}),
       ...(!drilldown.operator && Array.isArray(drilldown.excludeOperators) && drilldown.excludeOperators.length
         ? { excludeOperators: drilldown.excludeOperators.join(',') }
@@ -99,6 +102,8 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
   const [error, setError] = useState('')
   const [data, setData] = useState(null)
   const [offset, setOffset] = useState(0)
+  const [typeFilter, setTypeFilter] = useState(null)
+  const [typeSummary, setTypeSummary] = useState([])
 
   useEffect(() => {
     setMounted(true)
@@ -110,6 +115,8 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
     setData(null)
     setError('')
     setLoading(true)
+    setTypeFilter(null)
+    setTypeSummary([])
   }, [open, drilldown])
 
   useEffect(() => {
@@ -120,7 +127,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
       setError('')
       try {
         const metric = drilldown.metric || 'pauses'
-        const params = buildQueryParams(drilldown, filters, offset)
+        const params = buildQueryParams(drilldown, filters, offset, typeFilter)
         const response = await fetch(resolveEndpoint(metric, params))
         const payload = await response.json()
         if (!response.ok || payload.error) {
@@ -132,6 +139,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
           normalized = {
             ...payload,
             kind: 'sessions',
+            by_type: payload.by_type || [],
             items: (payload.sessions || []).map((session) => ({
               id: session.session,
               kind: 'pause',
@@ -165,6 +173,10 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
             items: [...(current?.items || []), ...(normalized.items || [])]
           }
         })
+
+        if (isPauseMetric(metric) && offset === 0 && !typeFilter) {
+          setTypeSummary(normalized.by_type || [])
+        }
       } catch (err) {
         setError(err.message || 'Nepodařilo se načíst rozpad')
         if (offset === 0) setData(null)
@@ -174,7 +186,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
     }
 
     fetchSessions()
-  }, [open, drilldown, filters, offset])
+  }, [open, drilldown, filters, offset, typeFilter])
 
   useEffect(() => {
     if (!open) return undefined
@@ -198,10 +210,33 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
   const hasMore = data ? data.items.length < data.total : false
   const showEnd = isPauseMetric(metric) || metric === 'login'
   const isOrders = data?.kind === 'orders' || isErpMetric(metric)
+  const showTypeSummary = isPauseMetric(metric) && typeSummary.length > 0
+  const activePauseId = typeFilter?.pause || drilldown.pause || ''
+  const activePauseName = typeFilter?.pauseName || drilldown.pauseName || ''
   const erpValueHeader =
     metric === 'domluveno_zamereni_ano' || metric === 'domluveno_zamereni_pocet'
       ? 'Naplánován termín'
       : 'Dopadl hovor'
+
+  function selectPauseType(type) {
+    const next = {
+      pause: type.pause_id || '',
+      pauseName: type.pause_name || ''
+    }
+    const isSame =
+      (activePauseId && next.pause && activePauseId === next.pause) ||
+      (!activePauseId && !next.pause && activePauseName === next.pauseName)
+    setOffset(0)
+    setData(null)
+    setTypeFilter(isSame ? null : next)
+  }
+
+  function clearPauseTypeFilter() {
+    if (!typeFilter) return
+    setOffset(0)
+    setData(null)
+    setTypeFilter(null)
+  }
 
   const panel = (
     <div className="drilldown-overlay" onClick={onClose} role="presentation">
@@ -224,6 +259,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
                 Nalezeno <strong>{data.total.toLocaleString('cs-CZ')}</strong>
                 {isOrders ? ' leadů' : isPauseMetric(metric) ? ' pauz' : ' záznamů'}
                 {!isOrders ? ` · ${formatDuration(data.duration_seconds || 0)}` : null}
+                {typeFilter?.pauseName ? ` · filtr: ${typeFilter.pauseName}` : null}
               </p>
             ) : null}
           </div>
@@ -240,10 +276,63 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
         ) : null}
         {error ? <div className="drilldown-status danger">{error}</div> : null}
 
-        {data ? (
+        {data || showTypeSummary ? (
           <div className="drilldown-body">
+            {showTypeSummary ? (
+              <aside className="drilldown-summary">
+                <section className="drilldown-summary-block">
+                  <h3>Součty podle typu pauzy</h3>
+                  {typeFilter ? (
+                    <button
+                      type="button"
+                      className="drilldown-chip drilldown-chip-neutral"
+                      onClick={clearPauseTypeFilter}
+                      style={{ marginBottom: 12, width: '100%' }}
+                    >
+                      <span className="drilldown-chip-label">Zrušit filtr typu</span>
+                      <span className="drilldown-chip-value" style={{ fontSize: 16 }}>
+                        Zobrazit všechny typy
+                      </span>
+                    </button>
+                  ) : null}
+                  <div className="drilldown-chip-grid">
+                    {typeSummary.map((type) => {
+                      const selected =
+                        (activePauseId && type.pause_id && activePauseId === type.pause_id) ||
+                        (!activePauseId &&
+                          activePauseName &&
+                          activePauseName === type.pause_name)
+                      return (
+                        <button
+                          key={`${type.pause_id || 'x'}-${type.pause_name}`}
+                          type="button"
+                          className={`drilldown-chip ${selected ? 'drilldown-chip-success' : 'drilldown-chip-neutral'}`}
+                          onClick={() => selectPauseType(type)}
+                          title="Kliknutím filtrujte sessions podle typu"
+                        >
+                          <span className="drilldown-chip-value">
+                            {formatDuration(type.duration_seconds)}
+                          </span>
+                          <span className="drilldown-chip-label">
+                            <strong>{type.pause_name}</strong>
+                            <br />
+                            {type.sessions.toLocaleString('cs-CZ')}×
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              </aside>
+            ) : null}
+
             <div className="drilldown-orders-pane">
-              {data.items.length === 0 ? (
+              {!data ? (
+                <div className="drilldown-status drilldown-loading">
+                  <div className="drilldown-spinner" />
+                  Načítání sessions...
+                </div>
+              ) : data.items.length === 0 ? (
                 <div className="drilldown-status">{emptyLabel(metric)}</div>
               ) : isOrders ? (
                 <div className="drilldown-table-wrap table-scroll">
@@ -327,7 +416,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
                 </div>
               )}
 
-              {hasMore ? (
+              {data && hasMore ? (
                 <div className="drilldown-footer">
                   <button
                     type="button"

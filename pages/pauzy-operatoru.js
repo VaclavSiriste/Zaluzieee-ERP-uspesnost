@@ -439,7 +439,8 @@ export default function OperatorPausesPage() {
                         openDrilldown({
                           operator: bubble.operator_id,
                           operatorName: bubble.operator_name,
-                          title: `${bubble.operator_name} — všechny pauzy`
+                          title: `${bubble.operator_name} — čas pauz`,
+                          subtitle: 'Součty podle typu pauzy + jednotlivé sessions'
                         })
                       }
                       disabled={!bubble.sessions}
@@ -454,7 +455,8 @@ export default function OperatorPausesPage() {
                         openDrilldown({
                           operator: bubble.operator_id,
                           operatorName: bubble.operator_name,
-                          title: `${bubble.operator_name} — všechny pauzy`
+                          title: `${bubble.operator_name} — počet pauz`,
+                          subtitle: 'Součty podle typu pauzy + jednotlivé sessions'
                         })
                       }
                       disabled={!bubble.sessions}
