@@ -21,6 +21,18 @@ const LOGIN_DURATION_SQL = `
   END
 `
 
+const READY_DURATION_SQL = `
+  CASE
+    WHEN rs.duration IS NOT NULL AND rs.duration > 0 THEN rs.duration::bigint
+    WHEN rs.start_time IS NOT NULL THEN
+      GREATEST(
+        0,
+        EXTRACT(EPOCH FROM (COALESCE(rs.end_time, NOW()) - rs.start_time))::bigint
+      )
+    ELSE 0
+  END
+`
+
 const TRANSIENT_DB_ERRORS = [
   'ENOTFOUND',
   'EAI_AGAIN',
@@ -160,28 +172,67 @@ export default async function handler(req, res) {
     let mapRow
 
     if (metric === 'login') {
+      // Primárně ready_sessions (reálná doba přihlášení); loginSessions jen pokud ready chybí
       countSql = `
         SELECT COUNT(*)::int AS total,
-               COALESCE(SUM(${LOGIN_DURATION_SQL}), 0)::bigint AS duration_seconds
-        FROM login_sessions ls
-        WHERE ls.start_time >= $1
-          AND ls.start_time <= $2
-          ${operator ? `AND ls."user" = $3` : ''}
+               COALESCE(SUM(duration_seconds), 0)::bigint AS duration_seconds
+        FROM (
+          SELECT (${READY_DURATION_SQL})::bigint AS duration_seconds
+          FROM ready_sessions rs
+          WHERE rs.start_time >= $1
+            AND rs.start_time <= $2
+            ${operator ? `AND rs."user" = $3` : ''}
+          UNION ALL
+          SELECT (${LOGIN_DURATION_SQL})::bigint AS duration_seconds
+          FROM login_sessions ls
+          WHERE ls.start_time >= $1
+            AND ls.start_time <= $2
+            ${operator ? `AND ls."user" = $3` : ''}
+            AND NOT EXISTS (
+              SELECT 1 FROM ready_sessions rs2
+              WHERE rs2."user" = ls."user"
+                AND rs2.start_time >= $1
+                AND rs2.start_time <= $2
+            )
+        ) t
       `
       listSql = `
-        SELECT
-          ls.session AS id,
-          ls."user" AS operator_id,
-          COALESCE(NULLIF(TRIM(u.title), ''), NULLIF(TRIM(u.name), ''), ls."user", 'Neznámý') AS operator_name,
-          ls.start_time,
-          ls.end_time,
-          (${LOGIN_DURATION_SQL})::bigint AS duration_seconds
-        FROM login_sessions ls
-        LEFT JOIN "user" u ON u."user" = ls."user"
-        WHERE ls.start_time >= $1
-          AND ls.start_time <= $2
-          ${operator ? `AND ls."user" = $3` : ''}
-        ORDER BY ls.start_time DESC NULLS LAST
+        SELECT * FROM (
+          SELECT
+            rs.session AS id,
+            rs."user" AS operator_id,
+            COALESCE(NULLIF(TRIM(u.title), ''), NULLIF(TRIM(u.name), ''), rs."user", 'Neznámý') AS operator_name,
+            rs.start_time,
+            rs.end_time,
+            (${READY_DURATION_SQL})::bigint AS duration_seconds,
+            'ready'::text AS source
+          FROM ready_sessions rs
+          LEFT JOIN "user" u ON u."user" = rs."user"
+          WHERE rs.start_time >= $1
+            AND rs.start_time <= $2
+            ${operator ? `AND rs."user" = $3` : ''}
+          UNION ALL
+          SELECT
+            ls.session AS id,
+            ls."user" AS operator_id,
+            COALESCE(NULLIF(TRIM(u.title), ''), NULLIF(TRIM(u.name), ''), ls."user", 'Neznámý') AS operator_name,
+            ls.start_time,
+            ls.end_time,
+            (${LOGIN_DURATION_SQL})::bigint AS duration_seconds,
+            'login'::text AS source
+          FROM login_sessions ls
+          LEFT JOIN "user" u ON u."user" = ls."user"
+          WHERE ls.start_time >= $1
+            AND ls.start_time <= $2
+            ${operator ? `AND ls."user" = $3` : ''}
+            AND NOT EXISTS (
+              SELECT 1 FROM ready_sessions rs2
+              WHERE rs2."user" = ls."user"
+                AND rs2.start_time >= $1
+                AND rs2.start_time <= $2
+            )
+        ) t
+        ORDER BY start_time DESC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `
       mapRow = mapLoginRow

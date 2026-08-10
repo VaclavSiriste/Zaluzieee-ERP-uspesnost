@@ -163,7 +163,28 @@ export default async function handler(req, res) {
         FROM pause_base
         GROUP BY operator_id
       ),
-      login_agg AS (
+      ready_agg AS (
+        SELECT
+          rs."user" AS operator_id,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN rs.duration IS NOT NULL AND rs.duration > 0 THEN rs.duration
+                WHEN rs.start_time IS NOT NULL THEN GREATEST(
+                  0,
+                  EXTRACT(EPOCH FROM (COALESCE(rs.end_time, NOW()) - rs.start_time))::bigint
+                )
+                ELSE 0
+              END
+            ),
+            0
+          )::bigint AS ready_seconds
+        FROM ready_sessions rs
+        WHERE rs.start_time >= $1
+          AND rs.start_time <= $2
+        GROUP BY rs."user"
+      ),
+      login_raw AS (
         SELECT
           ls."user" AS operator_id,
           COALESCE(
@@ -183,6 +204,17 @@ export default async function handler(req, res) {
         WHERE ls.start_time >= $1
           AND ls.start_time <= $2
         GROUP BY ls."user"
+      ),
+      -- Primárně readySessions (Daktela Ready); fallback loginSessions pokud ready chybí.
+      login_agg AS (
+        SELECT
+          COALESCE(r.operator_id, l.operator_id) AS operator_id,
+          CASE
+            WHEN COALESCE(r.ready_seconds, 0) > 0 THEN r.ready_seconds
+            ELSE COALESCE(l.login_seconds, 0)
+          END::bigint AS login_seconds
+        FROM ready_agg r
+        FULL OUTER JOIN login_raw l ON l.operator_id = r.operator_id
       ),
       call_agg AS (
         SELECT

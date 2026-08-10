@@ -104,6 +104,7 @@ export default function OperatorPausesPage() {
   const [syncState, setSyncState] = useState('idle')
   const [syncMessage, setSyncMessage] = useState('')
   const [syncFreshness, setSyncFreshness] = useState(null)
+  const [syncProgress, setSyncProgress] = useState(null)
   const [syncBusy, setSyncBusy] = useState(false)
 
   const filters = useMemo(
@@ -133,6 +134,7 @@ export default function OperatorPausesPage() {
       setSyncState(data.state || 'idle')
       setSyncMessage(data.message || '')
       setSyncFreshness(data.dataFreshness || null)
+      setSyncProgress(data.progress || null)
       return data
     } catch {
       return null
@@ -150,7 +152,7 @@ export default function OperatorPausesPage() {
       if (data?.state === 'success') {
         fetchData()
       }
-    }, 5000)
+    }, 2000)
     return () => clearInterval(intervalId)
   }, [syncState, period, startDate, endDate])
 
@@ -164,6 +166,7 @@ export default function OperatorPausesPage() {
       if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
       setSyncState(data.status?.state || 'running')
       setSyncMessage(data.message || data.status?.message || 'Synchronizace spuštěna.')
+      setSyncProgress(data.status?.progress || data.progress || null)
     } catch (err) {
       setSyncMessage(err.message || 'Nepodařilo se spustit synchronizaci')
     } finally {
@@ -432,7 +435,9 @@ export default function OperatorPausesPage() {
                   disabled={syncBusy || syncState === 'running'}
                   aria-busy={syncBusy || syncState === 'running'}
                 >
-                  {syncState === 'running' ? 'Aktualizuji data…' : 'Aktualizovat data'}
+                  {syncState === 'running'
+                    ? `Aktualizuji… ${syncProgress?.percent ?? 0} %`
+                    : 'Aktualizovat data'}
                 </button>
                 <button
                   type="button"
@@ -445,10 +450,71 @@ export default function OperatorPausesPage() {
                   ) : null}
                 </button>
               </div>
+
+              {(syncState === 'running' ||
+                ((syncState === 'success' || syncState === 'error') && syncProgress)) && (
+                <div
+                  className={`pauses-sync-panel${syncState === 'running' ? ' is-running' : ''}`}
+                  aria-live="polite"
+                >
+                  <div className="pauses-sync-panel-top">
+                    <strong>
+                      {syncState === 'running'
+                        ? syncProgress?.currentLabel
+                          ? `Stahuji: ${syncProgress.currentLabel}`
+                          : 'Synchronizace běží…'
+                        : syncMessage || 'Poslední sync'}
+                    </strong>
+                    <span>
+                      {syncProgress
+                        ? `${syncProgress.doneSteps || 0} / ${syncProgress.totalSteps || 0} tabulek`
+                        : ''}
+                      {syncProgress?.remainingSteps > 0 && syncState === 'running'
+                        ? ` · zbývá ${syncProgress.remainingSteps}`
+                        : ''}
+                    </span>
+                  </div>
+                  <div className="pauses-sync-bar" aria-hidden="true">
+                    <div
+                      className="pauses-sync-bar-fill"
+                      style={{ width: `${Math.max(0, Math.min(100, syncProgress?.percent || 0))}%` }}
+                    />
+                  </div>
+                  {syncState === 'running' && syncProgress?.page?.total != null ? (
+                    <p className="pauses-sync-detail">
+                      Stránka {syncProgress.page.page} ·{' '}
+                      {Number(syncProgress.page.offset || 0).toLocaleString('cs-CZ')} /{' '}
+                      {Number(syncProgress.page.total || 0).toLocaleString('cs-CZ')}
+                      {syncProgress.page.remaining != null
+                        ? ` · zbývá ${Number(syncProgress.page.remaining).toLocaleString('cs-CZ')} záznamů`
+                        : ''}
+                    </p>
+                  ) : syncMessage ? (
+                    <p className="pauses-sync-detail">{syncMessage}</p>
+                  ) : null}
+                  {Array.isArray(syncProgress?.steps) && syncProgress.steps.length > 0 ? (
+                    <ul className="pauses-sync-steps">
+                      {syncProgress.steps.map((step) => (
+                        <li
+                          key={step.id}
+                          className={`pauses-sync-step is-${step.state || 'pending'}`}
+                        >
+                          <span className="pauses-sync-step-mark" aria-hidden="true">
+                            {step.state === 'done' ? '✓' : step.state === 'error' ? '!' : step.state === 'running' ? '…' : '·'}
+                          </span>
+                          {step.label}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              )}
+
               <p className="pauses-sync-meta">
                 Poslední hovor v DB: {formatSyncTimestamp(syncFreshness?.call)}
-                {syncState === 'running' ? ' · synchronizace běží' : ''}
-                {syncState === 'success' && syncMessage ? ` · ${syncMessage}` : ''}
+                {syncFreshness?.ready_sessions
+                  ? ` · ready: ${formatSyncTimestamp(syncFreshness.ready_sessions)}`
+                  : ''}
                 {syncState === 'error' && syncMessage ? ` · ${syncMessage}` : ''}
               </p>
             </div>
