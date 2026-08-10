@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  TEAM_ASSIGN_OPTIONS,
+  TEAM_IDS,
+  resolveOperatorTeam,
+  teamLabel
+} from '@/lib/operator-teams'
 
 function initials(name) {
   const parts = String(name || '')
@@ -19,7 +25,9 @@ export default function OperatorDirectory({
   onToggleHidden,
   onShowAll,
   onHideAll,
-  activeIds = []
+  activeIds = [],
+  teamAssignments = {},
+  onAssignTeam
 }) {
   const [mounted, setMounted] = useState(false)
   const [query, setQuery] = useState('')
@@ -46,7 +54,17 @@ export default function OperatorDirectory({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const teamOrder = {
+      [TEAM_IDS.LUCIE]: 0,
+      [TEAM_IDS.STEPAN]: 1,
+      [TEAM_IDS.NONE]: 2
+    }
     const list = [...operators].sort((a, b) => {
+      const aTeam = resolveOperatorTeam(a, teamAssignments)
+      const bTeam = resolveOperatorTeam(b, teamAssignments)
+      if (teamOrder[aTeam] !== teamOrder[bTeam]) {
+        return (teamOrder[aTeam] ?? 9) - (teamOrder[bTeam] ?? 9)
+      }
       const aHidden = hiddenSet.has(a.operator_id) ? 1 : 0
       const bHidden = hiddenSet.has(b.operator_id) ? 1 : 0
       if (aHidden !== bHidden) return aHidden - bHidden
@@ -54,13 +72,26 @@ export default function OperatorDirectory({
     })
     if (!q) return list
     return list.filter((op) => {
-      const hay = `${op.operator_name} ${op.operator_id} ${op.email || ''}`.toLowerCase()
+      const team = teamLabel(resolveOperatorTeam(op, teamAssignments))
+      const hay = `${op.operator_name} ${op.operator_id} ${op.email || ''} ${team}`.toLowerCase()
       return hay.includes(q)
     })
-  }, [operators, query, hiddenSet])
+  }, [operators, query, hiddenSet, teamAssignments])
 
   const hiddenCount = hiddenIds.length
   const visibleCount = Math.max(operators.length - hiddenCount, 0)
+  const teamCounts = useMemo(() => {
+    const counts = {
+      [TEAM_IDS.LUCIE]: 0,
+      [TEAM_IDS.STEPAN]: 0,
+      [TEAM_IDS.NONE]: 0
+    }
+    for (const op of operators) {
+      const team = resolveOperatorTeam(op, teamAssignments)
+      counts[team] = (counts[team] || 0) + 1
+    }
+    return counts
+  }, [operators, teamAssignments])
 
   if (!mounted || !open) return null
 
@@ -77,10 +108,16 @@ export default function OperatorDirectory({
           <div>
             <h2 id="operator-directory-title">Číselník operátorů</h2>
             <p className="drilldown-subtitle">
-              Skryté operátory se nepočítají do statistik ani se nezobrazí v kartách.
+              Skryté operátory se nepočítají do statistik. Tým lze přehazovat mezi Lucií a Štěpánem.
             </p>
             <p className="drilldown-meta">
               Viditelní: <strong>{visibleCount}</strong> · Skrytí: <strong>{hiddenCount}</strong>
+              {' · '}
+              Lucie: <strong>{teamCounts[TEAM_IDS.LUCIE]}</strong>
+              {' · '}
+              Štěpán: <strong>{teamCounts[TEAM_IDS.STEPAN]}</strong>
+              {' · '}
+              Bez týmu: <strong>{teamCounts[TEAM_IDS.NONE]}</strong>
             </p>
           </div>
           <button type="button" className="drilldown-close" onClick={onClose} aria-label="Zavřít">
@@ -92,7 +129,7 @@ export default function OperatorDirectory({
           <input
             type="search"
             className="operator-directory-search"
-            placeholder="Hledat jméno…"
+            placeholder="Hledat jméno nebo tým…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -113,6 +150,7 @@ export default function OperatorDirectory({
             filtered.map((op) => {
               const hidden = hiddenSet.has(op.operator_id)
               const active = activeSet.has(op.operator_id)
+              const team = resolveOperatorTeam(op, teamAssignments)
               return (
                 <div
                   key={op.operator_id}
@@ -126,17 +164,33 @@ export default function OperatorDirectory({
                       <strong>{op.operator_name}</strong>
                       <p>
                         {op.operator_id}
-                        {active ? ' · v období má pauzy' : ''}
+                        {active ? ' · v období má data' : ''}
+                        {' · '}
+                        {teamLabel(team)}
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`operator-directory-toggle${hidden ? ' is-hidden' : ''}`}
-                    onClick={() => onToggleHidden(op.operator_id)}
-                  >
-                    {hidden ? 'Zobrazit' : 'Skrýt'}
-                  </button>
+                  <div className="operator-directory-controls">
+                    <select
+                      className="operator-directory-team-select"
+                      value={team}
+                      aria-label={`Tým pro ${op.operator_name}`}
+                      onChange={(event) => onAssignTeam?.(op.operator_id, event.target.value)}
+                    >
+                      {TEAM_ASSIGN_OPTIONS.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className={`operator-directory-toggle${hidden ? ' is-hidden' : ''}`}
+                      onClick={() => onToggleHidden(op.operator_id)}
+                    >
+                      {hidden ? 'Zobrazit' : 'Skrýt'}
+                    </button>
+                  </div>
                 </div>
               )
             })

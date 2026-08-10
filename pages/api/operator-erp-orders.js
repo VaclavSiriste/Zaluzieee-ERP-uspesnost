@@ -1,6 +1,6 @@
 /**
- * Rozpad ERP leadů pro metriky Dopadl hovor / Domluveno zaměření
- * GET /api/operator-erp-orders?metric=dopadl_hovor_ano|domluveno_zamereni_ano&operatorName=&period=&...
+ * Rozpad ERP leadů pro metriky Dopadl hovor / Domluveno zaměření / Počet chyb
+ * GET /api/operator-erp-orders?metric=dopadl_hovor_ano|pocet_chyb&operatorName=&period=&...
  */
 
 import { fetchErpYesNoOrders, isErpYesNoMetric } from '@/lib/dopadl-hovor-metrics'

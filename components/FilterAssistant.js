@@ -8,9 +8,19 @@ const DATE_BASIS_OPTIONS = [
 
 const PERIOD_OPTIONS = [
   { key: 'week', label: 'Týden' },
-  { key: 'month', label: 'Měsíc' },
+  { key: 'month', label: 'Měsíc (od 1. do dnes)' },
   { key: 'ytd', label: 'Rok' }
 ]
+
+function formatFilterDay(value) {
+  if (!value) return ''
+  const [year, month, day] = String(value).split('-').map(Number)
+  if (!year || !month || !day) return value
+  return new Date(year, month - 1, day).toLocaleDateString('cs-CZ', {
+    day: 'numeric',
+    month: 'numeric'
+  })
+}
 
 export default function FilterAssistant({
   period,
@@ -39,9 +49,12 @@ export default function FilterAssistant({
 
   const activeSummary = useMemo(() => {
     const activeDateBasis = DATE_BASIS_OPTIONS.find((item) => item.key === dateBasis)?.label || 'Datum navolání'
-    const activePeriod = period === 'custom'
-      ? `${startDate || 'Od'} - ${endDate || 'Do'}`
-      : PERIOD_OPTIONS.find((item) => item.key === period)?.label || 'Měsíc'
+    const activePeriod =
+      startDate && endDate
+        ? `${formatFilterDay(startDate)} – ${formatFilterDay(endDate)}`
+        : period === 'custom'
+          ? `${startDate || 'Od'} - ${endDate || 'Do'}`
+          : PERIOD_OPTIONS.find((item) => item.key === period)?.label || 'Měsíc'
 
     const parts = []
     if (!hideDateBasis) parts.push(activeDateBasis)

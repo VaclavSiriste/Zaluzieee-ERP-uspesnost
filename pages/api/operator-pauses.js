@@ -8,6 +8,7 @@ import {
   fetchDopadlHovorByOperator,
   fetchDomluvenoZamereniByOperator,
   fetchErpHovoryByOperator,
+  fetchPocetChybByOperator,
   normalizeOperatorKey
 } from '@/lib/dopadl-hovor-metrics'
 import { resolveDateRange } from '@/lib/metrics-query'
@@ -188,6 +189,7 @@ export default async function handler(req, res) {
           c."user" AS operator_id,
           COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'OUT')::int AS outgoing_calls,
           COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'IN')::int AS incoming_calls,
+          COUNT(*) FILTER (WHERE c.answered = false)::int AS rejected_calls,
           AVG(NULLIF(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
               AND c.duration IS NOT NULL
@@ -199,6 +201,7 @@ export default async function handler(req, res) {
         FROM call c
         WHERE c.call_time >= $1
           AND c.call_time <= $2
+          AND c."user" IS NOT NULL
         GROUP BY c."user"
       ),
       email_agg AS (
@@ -231,6 +234,7 @@ export default async function handler(req, res) {
         ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0) AS clean_days,
         COALESCE(c.outgoing_calls, 0)::int AS outgoing_calls,
         COALESCE(c.incoming_calls, 0)::int AS incoming_calls,
+        COALESCE(c.rejected_calls, 0)::int AS rejected_calls,
         COALESCE(c.outgoing_avg_seconds, 0)::float8 AS outgoing_avg_seconds,
         COALESCE(c.incoming_avg_seconds, 0)::float8 AS incoming_avg_seconds,
         (COALESCE(c.outgoing_calls, 0) + COALESCE(c.incoming_calls, 0))::int AS total_calls,
@@ -273,6 +277,7 @@ export default async function handler(req, res) {
     let dopadlByKey = new Map()
     let domluvenoByKey = new Map()
     let erpHovoryByKey = new Map()
+    let chybyByKey = new Map()
     try {
       const dopadlRows = await fetchDopadlHovorByOperator({ start, end })
       dopadlByKey = new Map(dopadlRows.map((row) => [row.operator_key, row]))
@@ -290,6 +295,12 @@ export default async function handler(req, res) {
       erpHovoryByKey = new Map(erpHovoryRows.map((row) => [row.operator_key, row]))
     } catch (error) {
       console.warn('operator-pauses ERP erp_hovory:', error.message)
+    }
+    try {
+      const chybyRows = await fetchPocetChybByOperator({ start, end })
+      chybyByKey = new Map(chybyRows.map((row) => [row.operator_key, row]))
+    } catch (error) {
+      console.warn('operator-pauses ERP pocet_chyb:', error.message)
     }
 
     const byOperator = new Map()
@@ -334,24 +345,29 @@ export default async function handler(req, res) {
         const dopadl = dopadlByKey.get(normalizeOperatorKey(row.operator_name))
         const domluveno = domluvenoByKey.get(normalizeOperatorKey(row.operator_name))
         const erpHovory = erpHovoryByKey.get(normalizeOperatorKey(row.operator_name))
+        const chyby = chybyByKey.get(normalizeOperatorKey(row.operator_name))
         const dopadlHovorAno = dopadl ? dopadl.dopadl_hovor_ano : 0
         const dopadlHovorPocet = dopadl ? dopadl.dopadl_hovor_pocet : 0
         const domluvenoZamereniAno = domluveno ? domluveno.domluveno_zamereni_ano : 0
         const domluvenoZamereniPocet = domluveno ? domluveno.domluveno_zamereni_pocet : 0
         const erpHovoryAno = erpHovory ? erpHovory.erp_hovory_ano : 0
         const erpHovoryPocet = erpHovory ? erpHovory.erp_hovory_pocet : 0
+        const pocetChyb = chyby ? chyby.pocet_chyb : 0
         const erpOperatorName =
           erpHovory?.operator_name ||
           dopadl?.operator_name ||
+          chyby?.operator_name ||
           domluveno?.operator_name ||
           row.operator_name
         const domluvenoOperatorName = domluveno?.operator_name || erpOperatorName
+        const chybyOperatorName = chyby?.operator_name || erpOperatorName
 
         return {
           operator_id: row.operator_id,
           operator_name: row.operator_name,
           erp_operator_name: erpOperatorName,
           domluveno_operator_name: domluvenoOperatorName,
+          chyby_operator_name: chybyOperatorName,
           login_seconds: Number(row.login_seconds) || 0,
           admin_seconds: Number(row.admin_seconds) || 0,
           idle_seconds: Number(row.idle_seconds) || 0,
@@ -363,6 +379,7 @@ export default async function handler(req, res) {
           outgoing_avg_seconds: Number(row.outgoing_avg_seconds) || 0,
           incoming_avg_seconds: Number(row.incoming_avg_seconds) || 0,
           total_calls: totalCalls,
+          rejected_calls: Number(row.rejected_calls) || 0,
           email_count: emailCount,
           email_avg_seconds: Number(row.email_avg_seconds) || 0,
           requests_per_day: Number(row.requests_per_day) || 0,
@@ -373,17 +390,19 @@ export default async function handler(req, res) {
           domluveno_zamereni_pocet: domluvenoZamereniPocet,
           erp_hovory_ano: erpHovoryAno,
           erp_hovory_pocet: erpHovoryPocet,
+          pocet_chyb: pocetChyb,
+          // Looker: Dopadl hovor ANO / odchozí hovory (Daktela)
           success_dopadl_hovor_pct:
-            dopadlHovorPocet > 0 ? (dopadlHovorAno / dopadlHovorPocet) * 100 : null,
+            outgoingCalls > 0 ? (dopadlHovorAno / outgoingCalls) * 100 : null,
           success_domluveni_zamereni_pct:
-            domluvenoZamereniPocet > 0
-              ? (domluvenoZamereniAno / domluvenoZamereniPocet) * 100
-              : null,
+            totalCalls > 0 ? (domluvenoZamereniAno / totalCalls) * 100 : null,
           success_erp_hovory_pct:
             erpHovoryPocet > 0 ? (erpHovoryAno / erpHovoryPocet) * 100 : null,
-          erp_vs_daktela_pct: totalCalls > 0 ? (erpHovoryAno / totalCalls) * 100 : null,
+          // Looker: ERP hovory / Daktela hovory celkem
+          erp_vs_daktela_pct: totalCalls > 0 ? (erpHovoryPocet / totalCalls) * 100 : null,
+          // Looker: ANO / ERP hovory
           success_zamereni_z_erp_pct:
-            erpHovoryPocet > 0 ? (domluvenoZamereniAno / erpHovoryPocet) * 100 : null
+            erpHovoryPocet > 0 ? (erpHovoryAno / erpHovoryPocet) * 100 : null
         }
       }),
       totals: {

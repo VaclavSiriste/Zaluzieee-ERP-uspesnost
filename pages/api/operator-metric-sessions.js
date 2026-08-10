@@ -35,6 +35,7 @@ const METRIC_LABELS = {
   outgoing: 'Odchozí hovory',
   incoming: 'Příchozí hovory',
   calls: 'Hovory',
+  rejected: 'Odmítnuté hovory',
   emails: 'Maily',
   activity: 'Požadavky (hovory + maily)'
 }
@@ -87,13 +88,15 @@ function mapLoginRow(row) {
 
 function mapCallRow(row) {
   const direction = String(row.direction || '').toUpperCase()
+  const cause = [row.disconnection_cause, row.disposition_cause].filter(Boolean).join(' / ')
+  const detailParts = [row.clid, cause || null, row.queue || null].filter(Boolean)
   return {
     id: row.id,
     kind: 'call',
     operator_id: row.operator_id,
     operator_name: row.operator_name,
     label: direction === 'IN' ? 'Příchozí hovor' : direction === 'OUT' ? 'Odchozí hovor' : 'Hovor',
-    detail: row.clid || row.queue || null,
+    detail: detailParts.length ? detailParts.join(' · ') : null,
     start_time: row.start_time,
     end_time: null,
     duration_seconds: Number(row.duration_seconds) || 0,
@@ -276,6 +279,40 @@ export default async function handler(req, res) {
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `
       mapRow = (row) => (row.kind === 'email' ? mapEmailRow(row) : mapCallRow(row))
+    } else if (metric === 'rejected') {
+      countSql = `
+        SELECT COUNT(*)::int AS total,
+               COALESCE(SUM(COALESCE(NULLIF(c.duration, 0), 0)), 0)::bigint AS duration_seconds
+        FROM call c
+        WHERE c.call_time >= $1
+          AND c.call_time <= $2
+          AND c.answered = false
+          ${operator ? `AND c."user" = $3` : ''}
+      `
+      listSql = `
+        SELECT
+          c.call AS id,
+          c."user" AS operator_id,
+          COALESCE(NULLIF(TRIM(u.title), ''), NULLIF(TRIM(u.name), ''), c."user", 'Neznámý') AS operator_name,
+          c.call_time AS start_time,
+          NULL::timestamp AS end_time,
+          COALESCE(NULLIF(c.duration, 0), 0)::bigint AS duration_seconds,
+          c.direction,
+          c.clid,
+          c.queue,
+          c.answered,
+          c.disconnection_cause,
+          c.disposition_cause
+        FROM call c
+        LEFT JOIN "user" u ON u."user" = c."user"
+        WHERE c.call_time >= $1
+          AND c.call_time <= $2
+          AND c.answered = false
+          ${operator ? `AND c."user" = $3` : ''}
+        ORDER BY c.call_time DESC NULLS LAST
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `
+      mapRow = mapCallRow
     } else {
       // outgoing | incoming | calls
       const directionFilter =
@@ -305,7 +342,9 @@ export default async function handler(req, res) {
           c.direction,
           c.clid,
           c.queue,
-          c.answered
+          c.answered,
+          c.disconnection_cause,
+          c.disposition_cause
         FROM call c
         LEFT JOIN "user" u ON u."user" = c."user"
         WHERE c.call_time >= $1

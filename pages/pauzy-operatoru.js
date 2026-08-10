@@ -4,6 +4,16 @@ import FilterAssistant from '@/components/FilterAssistant'
 import DrilldownCount from '@/components/DrilldownCount'
 import PauseDrilldown from '@/components/PauseDrilldown'
 import OperatorDirectory from '@/components/OperatorDirectory'
+import { getMonthToDateRange } from '@/lib/metrics-query'
+import {
+  TEAM_IDS,
+  TEAM_OPTIONS,
+  operatorMatchesTeamFilter,
+  readActiveTeamFilter,
+  readTeamAssignments,
+  writeActiveTeamFilter,
+  writeTeamAssignments
+} from '@/lib/operator-teams'
 
 const HIDDEN_OPERATORS_KEY = 'prvni.pauses.hiddenOperators'
 
@@ -63,10 +73,24 @@ function writeHiddenOperators(ids) {
   localStorage.setItem(HIDDEN_OPERATORS_KEY, JSON.stringify(ids))
 }
 
+function formatSyncTimestamp(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString('cs-CZ', {
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 export default function OperatorPausesPage() {
+  const initialMonthRange = getMonthToDateRange()
   const [period, setPeriod] = useState('month')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [startDate, setStartDate] = useState(initialMonthRange.startDate)
+  const [endDate, setEndDate] = useState(initialMonthRange.endDate)
   const [bubbles, setBubbles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -75,6 +99,12 @@ export default function OperatorPausesPage() {
   const [directoryOperators, setDirectoryOperators] = useState([])
   const [hiddenIds, setHiddenIds] = useState([])
   const [summaryRows, setSummaryRows] = useState([])
+  const [teamAssignments, setTeamAssignments] = useState({})
+  const [activeTeam, setActiveTeam] = useState(TEAM_IDS.ALL)
+  const [syncState, setSyncState] = useState('idle')
+  const [syncMessage, setSyncMessage] = useState('')
+  const [syncFreshness, setSyncFreshness] = useState(null)
+  const [syncBusy, setSyncBusy] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -87,11 +117,60 @@ export default function OperatorPausesPage() {
 
   useEffect(() => {
     setHiddenIds(readHiddenOperators())
+    setTeamAssignments(readTeamAssignments())
+    setActiveTeam(readActiveTeamFilter())
   }, [])
 
   useEffect(() => {
     fetchData()
   }, [period, startDate, endDate])
+
+  async function loadSyncStatus() {
+    try {
+      const response = await fetch('/api/daktela-sync')
+      const data = await response.json()
+      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+      setSyncState(data.state || 'idle')
+      setSyncMessage(data.message || '')
+      setSyncFreshness(data.dataFreshness || null)
+      return data
+    } catch {
+      return null
+    }
+  }
+
+  useEffect(() => {
+    loadSyncStatus()
+  }, [])
+
+  useEffect(() => {
+    if (syncState !== 'running') return undefined
+    const intervalId = setInterval(async () => {
+      const data = await loadSyncStatus()
+      if (data?.state === 'success') {
+        fetchData()
+      }
+    }, 5000)
+    return () => clearInterval(intervalId)
+  }, [syncState, period, startDate, endDate])
+
+  async function handleSyncData() {
+    if (syncBusy || syncState === 'running') return
+    setSyncBusy(true)
+    setSyncMessage('')
+    try {
+      const response = await fetch('/api/daktela-sync', { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+      setSyncState(data.status?.state || 'running')
+      setSyncMessage(data.message || data.status?.message || 'Synchronizace spuštěna.')
+    } catch (err) {
+      setSyncMessage(err.message || 'Nepodařilo se spustit synchronizaci')
+    } finally {
+      setSyncBusy(false)
+      loadSyncStatus()
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -154,7 +233,7 @@ export default function OperatorPausesPage() {
       if (err.name === 'AbortError') {
         setError('Načítání trvalo příliš dlouho. Zkuste obnovit stránku.')
       } else {
-        setError(err.message || 'Nepodařilo se načíst pauzy')
+        setError(err.message || 'Nepodařilo se načíst činnosti operátorů')
       }
       setBubbles([])
       setSummaryRows([])
@@ -165,7 +244,11 @@ export default function OperatorPausesPage() {
 
   function handlePeriodChange(nextPeriod) {
     setPeriod(nextPeriod)
-    if (nextPeriod !== 'custom') {
+    if (nextPeriod === 'month') {
+      const range = getMonthToDateRange()
+      setStartDate(range.startDate)
+      setEndDate(range.endDate)
+    } else if (nextPeriod !== 'custom') {
       setStartDate('')
       setEndDate('')
     }
@@ -184,6 +267,23 @@ export default function OperatorPausesPage() {
   function persistHidden(nextIds) {
     setHiddenIds(nextIds)
     writeHiddenOperators(nextIds)
+  }
+
+  function persistTeamAssignments(nextAssignments) {
+    setTeamAssignments(nextAssignments)
+    writeTeamAssignments(nextAssignments)
+  }
+
+  function handleTeamFilterChange(teamId) {
+    setActiveTeam(teamId)
+    writeActiveTeamFilter(teamId)
+  }
+
+  function assignOperatorTeam(operatorId, teamId) {
+    const id = String(operatorId)
+    if (!id) return
+    const next = { ...teamAssignments, [id]: teamId }
+    persistTeamAssignments(next)
   }
 
   function toggleHidden(operatorId) {
@@ -207,14 +307,29 @@ export default function OperatorPausesPage() {
   const hiddenSet = useMemo(() => new Set(hiddenIds.map(String)), [hiddenIds])
 
   const visibleBubbles = useMemo(
-    () => bubbles.filter((bubble) => !hiddenSet.has(String(bubble.operator_id))),
-    [bubbles, hiddenSet]
+    () =>
+      bubbles.filter((bubble) => {
+        if (hiddenSet.has(String(bubble.operator_id))) return false
+        return operatorMatchesTeamFilter(bubble, activeTeam, teamAssignments)
+      }),
+    [bubbles, hiddenSet, activeTeam, teamAssignments]
   )
 
   const visibleSummaryRows = useMemo(
-    () => summaryRows.filter((row) => !hiddenSet.has(String(row.operator_id))),
-    [summaryRows, hiddenSet]
+    () =>
+      summaryRows.filter((row) => {
+        if (hiddenSet.has(String(row.operator_id))) return false
+        return operatorMatchesTeamFilter(row, activeTeam, teamAssignments)
+      }),
+    [summaryRows, hiddenSet, activeTeam, teamAssignments]
   )
+
+  const teamExcludedIds = useMemo(() => {
+    if (activeTeam === TEAM_IDS.ALL) return []
+    return bubbles
+      .filter((bubble) => !operatorMatchesTeamFilter(bubble, activeTeam, teamAssignments))
+      .map((bubble) => String(bubble.operator_id))
+  }, [bubbles, activeTeam, teamAssignments])
 
   const summaryByOperator = useMemo(() => {
     const map = new Map()
@@ -268,6 +383,11 @@ export default function OperatorPausesPage() {
     subtitle,
     excludeHidden = false
   }) {
+    const excluded = new Set()
+    if (excludeHidden) {
+      for (const id of hiddenIds) excluded.add(String(id))
+      for (const id of teamExcludedIds) excluded.add(String(id))
+    }
     setDrilldown({
       operator,
       operatorName,
@@ -276,7 +396,7 @@ export default function OperatorPausesPage() {
       metric,
       title,
       subtitle,
-      excludeOperators: excludeHidden ? hiddenIds : []
+      excludeOperators: Array.from(excluded)
     })
   }
 
@@ -298,24 +418,55 @@ export default function OperatorPausesPage() {
           <header className="pauses-hero">
             <div className="pauses-hero-copy">
               <p className="pauses-kicker">Daktela + ERP · časový filtr</p>
-              <h1>Pauzy operátorů</h1>
+              <h1>Činnosti operátorů</h1>
               <p>
                 Všechny metriky na kartách (Daktela i ERP) se řídí jen časovým filtrem —
-                týden / měsíc / rok nebo vlastní datum. Kliknutím otevřete rozpad.
+                výchozí rozsah je od 1. dne měsíce do dnes; lze změnit na týden, rok nebo vlastní datum.
+                Kliknutím otevřete rozpad.
               </p>
-              <button
-                type="button"
-                className="pauses-directory-btn"
-                onClick={() => setDirectoryOpen(true)}
-              >
-                Číselník operátorů
-                {hiddenIds.length > 0 ? (
-                  <span className="pauses-directory-badge">{hiddenIds.length} skrytých</span>
-                ) : null}
-              </button>
+              <div className="pauses-hero-actions">
+                <button
+                  type="button"
+                  className="pauses-sync-btn"
+                  onClick={handleSyncData}
+                  disabled={syncBusy || syncState === 'running'}
+                  aria-busy={syncBusy || syncState === 'running'}
+                >
+                  {syncState === 'running' ? 'Aktualizuji data…' : 'Aktualizovat data'}
+                </button>
+                <button
+                  type="button"
+                  className="pauses-directory-btn"
+                  onClick={() => setDirectoryOpen(true)}
+                >
+                  Číselník operátorů
+                  {hiddenIds.length > 0 ? (
+                    <span className="pauses-directory-badge">{hiddenIds.length} skrytých</span>
+                  ) : null}
+                </button>
+              </div>
+              <p className="pauses-sync-meta">
+                Poslední hovor v DB: {formatSyncTimestamp(syncFreshness?.call)}
+                {syncState === 'running' ? ' · synchronizace běží' : ''}
+                {syncState === 'success' && syncMessage ? ` · ${syncMessage}` : ''}
+                {syncState === 'error' && syncMessage ? ` · ${syncMessage}` : ''}
+              </p>
             </div>
             <div className="pauses-hero-glow" aria-hidden="true" />
           </header>
+
+          <div className="pauses-team-switch" role="group" aria-label="Přepínání týmů">
+            {TEAM_OPTIONS.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                className={`pauses-team-btn${activeTeam === team.id ? ' is-active' : ''}`}
+                onClick={() => handleTeamFilterChange(team.id)}
+              >
+                {team.label}
+              </button>
+            ))}
+          </div>
 
           <FilterAssistant
             period={period}
@@ -330,7 +481,7 @@ export default function OperatorPausesPage() {
           {loading ? (
             <div className="pauses-loading">
               <span className="pauses-spinner" />
-              Načítám pauzy…
+              Načítám činnosti operátorů…
             </div>
           ) : null}
 
@@ -394,8 +545,10 @@ export default function OperatorPausesPage() {
           {!loading && !error && visibleBubbles.length === 0 ? (
             <div className="pauses-empty">
               {bubbles.length > 0
-                ? 'Všichni operátoři s pauzami jsou skrytí. Otevřete číselník a některé zobrazte.'
-                : 'Pro zvolené období nejsou žádné pauzy.'}
+                ? activeTeam !== TEAM_IDS.ALL
+                  ? 'V tomto týmu nejsou v období žádní viditelní operátoři. Změňte tým nebo upravte číselník.'
+                  : 'Všichni operátoři s daty jsou skrytí. Otevřete číselník a některé zobrazte.'
+                : 'Pro zvolené období nejsou žádná data.'}
             </div>
           ) : null}
 
@@ -558,6 +711,23 @@ export default function OperatorPausesPage() {
                       <button
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.rejected_calls}
+                        onClick={() =>
+                          openMetricDrilldown(
+                            bubble,
+                            'rejected',
+                            'Odmítnuté hovory',
+                            'Nezvednuté / zmeškané hovory (answered = Ne) v Daktela'
+                          )
+                        }
+                      >
+                        <span>Odmítnuté hovory</span>
+                        <strong>{formatNumber(summary.rejected_calls, 0)}</strong>
+                        <small>rozkliknout seznam</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
                         disabled={!summary.email_count}
                         onClick={() => openMetricDrilldown(bubble, 'emails', 'Maily')}
                       >
@@ -608,7 +778,7 @@ export default function OperatorPausesPage() {
                             bubble,
                             'dopadl_hovor_ano',
                             'Dopadl hovor ANO',
-                            'Looker: dopadl_hovor = Ano · filtry status ≠ duplikace, kdo domluvil ≠ null',
+                            'Looker: dopadl_hovor = Ano · úspěšnost = ANO / odchozí hovory',
                             { operatorName: summary.erp_operator_name || bubble.operator_name }
                           )
                         }
@@ -617,8 +787,8 @@ export default function OperatorPausesPage() {
                         <strong>{formatNumber(summary.dopadl_hovor_ano, 0)}</strong>
                         <small>
                           {formatPercent(summary.success_dopadl_hovor_pct)}
-                          {summary.dopadl_hovor_pocet
-                            ? ` · z ${formatNumber(summary.dopadl_hovor_pocet, 0)}`
+                          {summary.outgoing_calls
+                            ? ` · z ${formatNumber(summary.outgoing_calls, 0)} odchozích`
                             : ''}
                         </small>
                       </button>
@@ -638,7 +808,12 @@ export default function OperatorPausesPage() {
                       >
                         <span>ERP hovory</span>
                         <strong>{formatNumber(summary.erp_hovory_pocet, 0)}</strong>
-                        <small>Ano + Ne · filtry Důvod ne</small>
+                        <small>
+                          Ano + Ne · filtry Důvod ne
+                          {summary.erp_vs_daktela_pct != null
+                            ? ` · vs Daktela ${formatPercent(summary.erp_vs_daktela_pct)}`
+                            : ''}
+                        </small>
                       </button>
                       <button
                         type="button"
@@ -661,9 +836,6 @@ export default function OperatorPausesPage() {
                           {summary.erp_hovory_pocet
                             ? ` · z ${formatNumber(summary.erp_hovory_pocet, 0)} ERP`
                             : ''}
-                          {summary.erp_vs_daktela_pct != null
-                            ? ` · vs Daktela ${formatPercent(summary.erp_vs_daktela_pct)}`
-                            : ''}
                         </small>
                       </button>
                       <button
@@ -675,7 +847,7 @@ export default function OperatorPausesPage() {
                             bubble,
                             'domluveno_zamereni_ano',
                             'Domluveno zaměření ANO',
-                            'Looker: naplanovan_termin_zamereni = Ano · filtry status ≠ duplikace, kdo naplánoval ≠ null',
+                            'Looker: naplanovan_termin_zamereni = Ano · úspěšnost = ANO / hovory celkem',
                             {
                               operatorName:
                                 summary.domluveno_operator_name ||
@@ -689,8 +861,8 @@ export default function OperatorPausesPage() {
                         <strong>{formatNumber(summary.domluveno_zamereni_ano, 0)}</strong>
                         <small>
                           {formatPercent(summary.success_domluveni_zamereni_pct)}
-                          {summary.domluveno_zamereni_pocet
-                            ? ` · z ${formatNumber(summary.domluveno_zamereni_pocet, 0)}`
+                          {summary.total_calls
+                            ? ` · z ${formatNumber(summary.total_calls, 0)} hovorů`
                             : ''}
                         </small>
                       </button>
@@ -698,11 +870,34 @@ export default function OperatorPausesPage() {
                         type="button"
                         className="pauses-summary-item"
                         disabled={summary.success_zamereni_z_erp_pct == null}
-                        title="Domluveno zaměření ANO / ERP hovory"
+                        title="ANO / ERP hovory"
                       >
-                        <span>Úspěšnost zaměření z ERP</span>
+                        <span>Úspěšnost zaměření</span>
                         <strong>{formatPercent(summary.success_zamereni_z_erp_pct)}</strong>
-                        <small>domluveno ANO / ERP hovory</small>
+                        <small>ANO / ERP hovory</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.pocet_chyb}
+                        onClick={() =>
+                          openMetricDrilldown(
+                            bubble,
+                            'pocet_chyb',
+                            'Počet chyb',
+                            'Looker: 5 typů chyb · období podle data vytvoření zakázky',
+                            {
+                              operatorName:
+                                summary.chyby_operator_name ||
+                                summary.erp_operator_name ||
+                                bubble.operator_name
+                            }
+                          )
+                        }
+                      >
+                        <span>Počet chyb</span>
+                        <strong>{formatNumber(summary.pocet_chyb, 0)}</strong>
+                        <small>rozkliknout chyby</small>
                       </button>
                     </div>
                   ) : null}
@@ -729,6 +924,8 @@ export default function OperatorPausesPage() {
         onToggleHidden={toggleHidden}
         onShowAll={showAllOperators}
         onHideAll={hideAllOperators}
+        teamAssignments={teamAssignments}
+        onAssignTeam={assignOperatorTeam}
       />
     </main>
   )

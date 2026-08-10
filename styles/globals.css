@@ -34,7 +34,7 @@ button {
   cursor: pointer;
 }
 
-button:not(.drilldown-close):not(.drilldown-load-more):not(.drilldown-chip):not(.drilldown-region-card):not(.filter-assistant-trigger):not(.filter-assistant-close):not(.period-chip):not(.login-primary-button):not(.login-secondary-button):not(.pauses-stat):not(.pauses-bar-track):not(.pauses-directory-btn):not(.pauses-kpi-button):not(.pauses-card-hide):not(.pauses-summary-item):not(.operator-directory-action):not(.operator-directory-toggle):hover {
+button:not(.drilldown-close):not(.drilldown-load-more):not(.drilldown-chip):not(.drilldown-region-card):not(.filter-assistant-trigger):not(.filter-assistant-close):not(.period-chip):not(.login-primary-button):not(.login-secondary-button):not(.pauses-stat):not(.pauses-bar-track):not(.pauses-directory-btn):not(.pauses-sync-btn):not(.pauses-kpi-button):not(.pauses-card-hide):not(.pauses-summary-item):not(.pauses-team-btn):not(.operator-directory-action):not(.operator-directory-toggle):hover {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   background-color: #e9edff;
   color: #1e2a52;
@@ -1415,7 +1415,7 @@ h6 {
   }
 }
 
-/* —— Pauzy operátorů —— */
+/* —— Činnosti operátorů —— */
 .pauses-page .dashboard-main {
   display: grid;
   gap: 18px;
@@ -1841,11 +1841,19 @@ h6 {
   }
 }
 
+.pauses-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.pauses-sync-btn,
 .pauses-directory-btn {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-top: 14px;
   border: 1px solid #c7d2fe;
   border-radius: 999px;
   padding: 10px 16px;
@@ -1854,6 +1862,62 @@ h6 {
   font-weight: 700;
   box-shadow: 0 8px 20px rgba(67, 56, 202, 0.08);
   transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pauses-sync-btn {
+  border-color: #93c5fd;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1d4ed8;
+}
+
+.pauses-sync-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.16);
+  color: #1e3a8a;
+}
+
+.pauses-sync-btn:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.pauses-sync-meta {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pauses-team-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+
+.pauses-team-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 9px 16px;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.pauses-team-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: none;
+  transform: none;
+}
+
+.pauses-team-btn.is-active {
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
 }
 
 .pauses-directory-btn:hover {
@@ -2027,6 +2091,32 @@ h6 {
   color: #64748b;
   font-size: 12px;
   word-break: break-all;
+}
+
+.operator-directory-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.operator-directory-team-select {
+  min-width: 132px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #fff;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.operator-directory-team-select:focus {
+  outline: none;
+  border-color: #64748b;
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.15);
 }
 
 .operator-directory-toggle {

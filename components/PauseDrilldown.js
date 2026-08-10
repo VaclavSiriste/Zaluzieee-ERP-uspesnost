@@ -36,7 +36,8 @@ function isErpMetric(metric) {
     metric === 'domluveno_zamereni_ano' ||
     metric === 'domluveno_zamereni_pocet' ||
     metric === 'erp_hovory_ano' ||
-    metric === 'erp_hovory_pocet'
+    metric === 'erp_hovory_pocet' ||
+    metric === 'pocet_chyb'
   )
 }
 
@@ -86,6 +87,7 @@ function emptyLabel(metric) {
   if (isErpMetric(metric)) return 'Žádné leady v zvoleném období.'
   if (metric === 'login') return 'Žádná přihlášení v zvoleném období.'
   if (metric === 'emails') return 'Žádné maily v zvoleném období.'
+  if (metric === 'rejected') return 'Žádné odmítnuté hovory v zvoleném období.'
   if (metric === 'activity') return 'Žádné hovory ani maily v zvoleném období.'
   return 'Žádné hovory v zvoleném období.'
 }
@@ -214,9 +216,11 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
   const activePauseId = typeFilter?.pause || drilldown.pause || ''
   const activePauseName = typeFilter?.pauseName || drilldown.pauseName || ''
   const erpValueHeader =
-    metric === 'domluveno_zamereni_ano' || metric === 'domluveno_zamereni_pocet'
-      ? 'Naplánován termín'
-      : 'Dopadl hovor'
+    metric === 'pocet_chyb'
+      ? 'Typ chyby'
+      : metric === 'domluveno_zamereni_ano' || metric === 'domluveno_zamereni_pocet'
+        ? 'Naplánován termín'
+        : 'Dopadl hovor'
 
   function selectPauseType(type) {
     const next = {

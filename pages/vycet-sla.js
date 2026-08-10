@@ -189,7 +189,7 @@ export default function VycetSlaPage() {
               <section className="sla-block">
                 <h2 className="sla-block-title">Kalendářní den — poptávky a rychlost kontaktu</h2>
                 <p className="sla-block-desc">
-                  Filtry: bez duplikací/reklamací, s ID formuláře, mimo Karlovarský kraj, Důvod ne ≠ Venkovky (null OK).
+                  Filtry: bez duplikací/reklamací, s ID formuláře, všechny kraje včetně Karlovarského, Důvod ne ≠ Venkovky (null OK).
                 </p>
                 <div className="sla-kpis sla-kpis-wide" aria-label="Poptávky a SLA">
                   <article className="sla-kpi">
