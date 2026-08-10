@@ -1902,6 +1902,19 @@ h6 {
   box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
 }
 
+.pauses-sync-panel.is-error {
+  border-color: #fca5a5;
+  background: rgba(254, 242, 242, 0.95);
+}
+
+.pauses-sync-panel.is-error .pauses-sync-panel-top {
+  color: #991b1b;
+}
+
+.pauses-sync-panel.is-error .pauses-sync-detail {
+  color: #b91c1c;
+}
+
 .pauses-sync-panel-top {
   display: flex;
   flex-wrap: wrap;

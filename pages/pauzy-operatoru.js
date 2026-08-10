@@ -129,14 +129,27 @@ export default function OperatorPausesPage() {
   async function loadSyncStatus() {
     try {
       const response = await fetch('/api/daktela-sync')
-      const data = await response.json()
-      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+      const text = await response.text()
+      let data = null
+      try {
+        data = text ? JSON.parse(text) : null
+      } catch {
+        throw new Error(
+          response.redirected || response.status === 307 || response.status === 302
+            ? 'Nejste přihlášeni — obnovte stránku a přihlaste se.'
+            : `Neplatná odpověď API (${response.status})`
+        )
+      }
+      if (!response.ok || data?.error) {
+        throw new Error(data?.error || `HTTP ${response.status}`)
+      }
       setSyncState(data.state || 'idle')
-      setSyncMessage(data.message || '')
+      if (data.message) setSyncMessage(data.message)
       setSyncFreshness(data.dataFreshness || null)
       setSyncProgress(data.progress || null)
       return data
-    } catch {
+    } catch (err) {
+      setSyncMessage(err.message || 'Nepodařilo se načíst stav syncu')
       return null
     }
   }
@@ -157,21 +170,41 @@ export default function OperatorPausesPage() {
   }, [syncState, period, startDate, endDate])
 
   async function handleSyncData() {
-    if (syncBusy || syncState === 'running') return
+    if (syncBusy) return
+    if (syncState === 'running') {
+      setSyncMessage('Synchronizace už běží — sledujte průběh níže.')
+      return
+    }
     setSyncBusy(true)
-    setSyncMessage('')
+    setSyncMessage('Spouštím synchronizaci…')
+    setSyncState('running')
     try {
       const response = await fetch('/api/daktela-sync', { method: 'POST' })
-      const data = await response.json()
-      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+      const text = await response.text()
+      let data = null
+      try {
+        data = text ? JSON.parse(text) : null
+      } catch {
+        throw new Error(
+          response.status === 401 || response.status === 302 || response.status === 307
+            ? 'Nejste přihlášeni — obnovte stránku a přihlaste se.'
+            : `Server nevrátil JSON (${response.status}). ${text.slice(0, 120)}`
+        )
+      }
+      if (!response.ok || data?.error) {
+        throw new Error(data?.error || data?.message || `HTTP ${response.status}`)
+      }
       setSyncState(data.status?.state || 'running')
       setSyncMessage(data.message || data.status?.message || 'Synchronizace spuštěna.')
       setSyncProgress(data.status?.progress || data.progress || null)
+      // znovu načti progress (lokální běh)
+      setTimeout(() => loadSyncStatus(), 800)
     } catch (err) {
+      setSyncState('error')
       setSyncMessage(err.message || 'Nepodařilo se spustit synchronizaci')
+      setSyncProgress(null)
     } finally {
       setSyncBusy(false)
-      loadSyncStatus()
     }
   }
 
@@ -452,9 +485,12 @@ export default function OperatorPausesPage() {
               </div>
 
               {(syncState === 'running' ||
-                ((syncState === 'success' || syncState === 'error') && syncProgress)) && (
+                syncState === 'error' ||
+                (syncState === 'success' && syncProgress)) && (
                 <div
-                  className={`pauses-sync-panel${syncState === 'running' ? ' is-running' : ''}`}
+                  className={`pauses-sync-panel${syncState === 'running' ? ' is-running' : ''}${
+                    syncState === 'error' ? ' is-error' : ''
+                  }`}
                   aria-live="polite"
                 >
                   <div className="pauses-sync-panel-top">
@@ -463,7 +499,9 @@ export default function OperatorPausesPage() {
                         ? syncProgress?.currentLabel
                           ? `Stahuji: ${syncProgress.currentLabel}`
                           : 'Synchronizace běží…'
-                        : syncMessage || 'Poslední sync'}
+                        : syncState === 'error'
+                          ? 'Sync se nepodařil'
+                          : syncMessage || 'Poslední sync'}
                     </strong>
                     <span>
                       {syncProgress
@@ -474,12 +512,16 @@ export default function OperatorPausesPage() {
                         : ''}
                     </span>
                   </div>
-                  <div className="pauses-sync-bar" aria-hidden="true">
-                    <div
-                      className="pauses-sync-bar-fill"
-                      style={{ width: `${Math.max(0, Math.min(100, syncProgress?.percent || 0))}%` }}
-                    />
-                  </div>
+                  {syncState === 'running' ? (
+                    <div className="pauses-sync-bar" aria-hidden="true">
+                      <div
+                        className="pauses-sync-bar-fill"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, syncProgress?.percent || 0))}%`
+                        }}
+                      />
+                    </div>
+                  ) : null}
                   {syncState === 'running' && syncProgress?.page?.total != null ? (
                     <p className="pauses-sync-detail">
                       Stránka {syncProgress.page.page} ·{' '}
@@ -500,7 +542,13 @@ export default function OperatorPausesPage() {
                           className={`pauses-sync-step is-${step.state || 'pending'}`}
                         >
                           <span className="pauses-sync-step-mark" aria-hidden="true">
-                            {step.state === 'done' ? '✓' : step.state === 'error' ? '!' : step.state === 'running' ? '…' : '·'}
+                            {step.state === 'done'
+                              ? '✓'
+                              : step.state === 'error'
+                                ? '!'
+                                : step.state === 'running'
+                                  ? '…'
+                                  : '·'}
                           </span>
                           {step.label}
                         </li>
@@ -515,7 +563,6 @@ export default function OperatorPausesPage() {
                 {syncFreshness?.ready_sessions
                   ? ` · ready: ${formatSyncTimestamp(syncFreshness.ready_sessions)}`
                   : ''}
-                {syncState === 'error' && syncMessage ? ` · ${syncMessage}` : ''}
               </p>
             </div>
             <div className="pauses-hero-glow" aria-hidden="true" />
