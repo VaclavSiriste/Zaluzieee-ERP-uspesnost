@@ -683,7 +683,7 @@ export default function OperatorPausesPage() {
                       <h3>{bubble.operator_name}</h3>
                       <p>
                         {summary
-                          ? `${formatDuration(summary.clean_seconds)} čistého času`
+                          ? `${formatNumber(summary.requests_per_day, 2)} pož./den · vytíženost ${formatPercent(summary.utilization_pct)}`
                           : `${bubble.pauses.length} typů pauz`}
                       </p>
                     </div>
@@ -734,93 +734,12 @@ export default function OperatorPausesPage() {
 
                   {summary ? (
                     <div className="pauses-summary-grid">
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.login_seconds}
-                        onClick={() =>
-                          openMetricDrilldown(bubble, 'login', 'Doba přihlášení')
-                        }
-                      >
-                        <span>Doba přihlášení</span>
-                        <strong>{formatDuration(summary.login_seconds)}</strong>
-                        <small>rozkliknout sessions</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.admin_seconds}
-                        onClick={() =>
-                          openMetricDrilldown(bubble, 'admin', 'Administrativa')
-                        }
-                      >
-                        <span>Administrativa</span>
-                        <strong>{formatDuration(summary.admin_seconds)}</strong>
-                        <small>rozkliknout pauzy</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.idle_seconds}
-                        onClick={() => openMetricDrilldown(bubble, 'idle', 'Nečinnost')}
-                      >
-                        <span>Nečinnost</span>
-                        <strong>{formatDuration(summary.idle_seconds)}</strong>
-                        <small>rozkliknout pauzy</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.login_seconds && !summary.idle_seconds}
-                        onClick={() =>
-                          openMetricDrilldown(
-                            bubble,
-                            'login',
-                            'Čistý čas',
-                            'Čistý čas = přihlášení − nečinnost (rozpad sessions přihlášení)'
-                          )
-                        }
-                      >
-                        <span>Čistý čas</span>
-                        <strong>{formatDuration(summary.clean_seconds)}</strong>
-                        <small>{formatNumber(summary.clean_days, 2)} dne</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.outgoing_calls}
-                        onClick={() =>
-                          openMetricDrilldown(bubble, 'outgoing', 'Odchozí hovory')
-                        }
-                      >
-                        <span>Odchozí hovory</span>
-                        <strong>{formatNumber(summary.outgoing_calls, 0)}</strong>
-                        <small>průměr {formatDuration(summary.outgoing_avg_seconds)}</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.incoming_calls}
-                        onClick={() =>
-                          openMetricDrilldown(bubble, 'incoming', 'Příchozí hovory')
-                        }
-                      >
-                        <span>Příchozí hovory</span>
-                        <strong>{formatNumber(summary.incoming_calls, 0)}</strong>
-                        <small>průměr {formatDuration(summary.incoming_avg_seconds)}</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.total_calls}
-                        onClick={() =>
-                          openMetricDrilldown(bubble, 'calls', 'Hovory celkem')
-                        }
-                      >
-                        <span>Hovory celkem</span>
-                        <strong>{formatNumber(summary.total_calls, 0)}</strong>
-                        <small>rozkliknout hovory</small>
-                      </button>
+                      {/*
+                        Skryté v UI (počíta se dál v API):
+                        Doba přihlášení, Administrativa, Nečinnost, Čistý čas,
+                        Odchozí/Příchozí/Hovory celkem, Maily,
+                        Dopadl hovor ANO, Domluveno zaměření ANO, ERP hovory, ANO
+                      */}
                       <button
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"
@@ -837,16 +756,6 @@ export default function OperatorPausesPage() {
                         <span>Odmítnuté hovory</span>
                         <strong>{formatNumber(summary.rejected_calls, 0)}</strong>
                         <small>rozkliknout seznam</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.email_count}
-                        onClick={() => openMetricDrilldown(bubble, 'emails', 'Maily')}
-                      >
-                        <span>Maily</span>
-                        <strong>{formatNumber(summary.email_count, 0)}</strong>
-                        <small>průměr {formatDuration(summary.email_avg_seconds)}</small>
                       </button>
                       <button
                         type="button"
@@ -881,103 +790,6 @@ export default function OperatorPausesPage() {
                         <span>Vytíženost</span>
                         <strong>{formatPercent(summary.utilization_pct)}</strong>
                         <small>rozkliknout podklady</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.dopadl_hovor_ano && !summary.dopadl_hovor_pocet}
-                        onClick={() =>
-                          openMetricDrilldown(
-                            bubble,
-                            'dopadl_hovor_ano',
-                            'Dopadl hovor ANO',
-                            'Looker: dopadl_hovor = Ano · úspěšnost = ANO / odchozí hovory',
-                            { operatorName: summary.erp_operator_name || bubble.operator_name }
-                          )
-                        }
-                      >
-                        <span>Dopadl hovor ANO</span>
-                        <strong>{formatNumber(summary.dopadl_hovor_ano, 0)}</strong>
-                        <small>
-                          {formatPercent(summary.success_dopadl_hovor_pct)}
-                          {summary.outgoing_calls
-                            ? ` · z ${formatNumber(summary.outgoing_calls, 0)} odchozích`
-                            : ''}
-                        </small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.erp_hovory_pocet}
-                        onClick={() =>
-                          openMetricDrilldown(
-                            bubble,
-                            'erp_hovory_pocet',
-                            'ERP hovory',
-                            'Looker: dopadl_hovor = Ano NEBO Ne + filtry Důvod ne · vyloučeni Matěj Kalkus, Natálie Sawczuková',
-                            { operatorName: summary.erp_operator_name || bubble.operator_name }
-                          )
-                        }
-                      >
-                        <span>ERP hovory</span>
-                        <strong>{formatNumber(summary.erp_hovory_pocet, 0)}</strong>
-                        <small>
-                          Ano + Ne · filtry Důvod ne
-                          {summary.erp_vs_daktela_pct != null
-                            ? ` · vs Daktela ${formatPercent(summary.erp_vs_daktela_pct)}`
-                            : ''}
-                        </small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.erp_hovory_ano}
-                        onClick={() =>
-                          openMetricDrilldown(
-                            bubble,
-                            'erp_hovory_ano',
-                            'ANO',
-                            'Looker kolonka ANO: dopadl_hovor = Ano + filtry Důvod ne · vyloučeni Matěj Kalkus, Natálie Sawczuková',
-                            { operatorName: summary.erp_operator_name || bubble.operator_name }
-                          )
-                        }
-                      >
-                        <span>ANO</span>
-                        <strong>{formatNumber(summary.erp_hovory_ano, 0)}</strong>
-                        <small>
-                          {formatPercent(summary.success_erp_hovory_pct)}
-                          {summary.erp_hovory_pocet
-                            ? ` · z ${formatNumber(summary.erp_hovory_pocet, 0)} ERP`
-                            : ''}
-                        </small>
-                      </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.domluveno_zamereni_ano && !summary.domluveno_zamereni_pocet}
-                        onClick={() =>
-                          openMetricDrilldown(
-                            bubble,
-                            'domluveno_zamereni_ano',
-                            'Domluveno zaměření ANO',
-                            'Looker: naplanovan_termin_zamereni = Ano · úspěšnost = ANO / hovory celkem',
-                            {
-                              operatorName:
-                                summary.domluveno_operator_name ||
-                                summary.erp_operator_name ||
-                                bubble.operator_name
-                            }
-                          )
-                        }
-                      >
-                        <span>Domluveno zaměření ANO</span>
-                        <strong>{formatNumber(summary.domluveno_zamereni_ano, 0)}</strong>
-                        <small>
-                          {formatPercent(summary.success_domluveni_zamereni_pct)}
-                          {summary.total_calls
-                            ? ` · z ${formatNumber(summary.total_calls, 0)} hovorů`
-                            : ''}
-                        </small>
                       </button>
                       <button
                         type="button"
