@@ -45,6 +45,61 @@ function isMissedCallbackMetric(metric) {
   return metric === 'missed_callbacks'
 }
 
+function isUtilizationMetric(metric) {
+  return metric === 'utilization'
+}
+
+function formatNumber(value, digits = 2) {
+  const n = Number(value) || 0
+  return n.toLocaleString('cs-CZ', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits
+  })
+}
+
+function buildUtilizationBreakdown(inputs = {}) {
+  const loginSeconds = Number(inputs.login_seconds) || 0
+  const idleSeconds = Number(inputs.idle_seconds) || 0
+  const adminSeconds = Number(inputs.admin_seconds) || 0
+  const cleanSeconds = Number(inputs.clean_seconds) || 0
+  const outgoingCalls = Number(inputs.outgoing_calls) || 0
+  const outgoingAvgSeconds = Number(inputs.outgoing_avg_seconds) || 0
+  const incomingCalls = Number(inputs.incoming_calls) || 0
+  const incomingAvgSeconds = Number(inputs.incoming_avg_seconds) || 0
+  const emailCount = Number(inputs.email_count) || 0
+  const emailAvgSeconds = Number(inputs.email_avg_seconds) || 0
+
+  const adminUsedSeconds = Math.min(adminSeconds, cleanSeconds)
+  const outgoingSeconds = outgoingCalls * outgoingAvgSeconds
+  const incomingSeconds = incomingCalls * incomingAvgSeconds
+  const emailSeconds = emailCount * emailAvgSeconds
+  const numeratorSeconds = adminUsedSeconds + outgoingSeconds + incomingSeconds + emailSeconds
+  const rawPct = cleanSeconds > 0 ? (numeratorSeconds / cleanSeconds) * 100 : 0
+  const computedPct = Math.min(rawPct, 100)
+
+  return {
+    loginSeconds,
+    idleSeconds,
+    adminSeconds,
+    adminUsedSeconds,
+    cleanSeconds,
+    outgoingCalls,
+    outgoingAvgSeconds,
+    incomingCalls,
+    incomingAvgSeconds,
+    emailCount,
+    emailAvgSeconds,
+    outgoingSeconds,
+    incomingSeconds,
+    emailSeconds,
+    numeratorSeconds,
+    rawPct,
+    computedPct,
+    reportedPct: Number(inputs.utilization_pct) || 0,
+    adminExceedsClean: adminSeconds > cleanSeconds && cleanSeconds > 0
+  }
+}
+
 function formatHours(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
   const hours = Number(value)
@@ -144,13 +199,22 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
     setOffset(0)
     setData(null)
     setError('')
-    setLoading(true)
     setTypeFilter(null)
     setTypeSummary([])
+    if (isUtilizationMetric(drilldown.metric)) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
   }, [open, drilldown])
 
   useEffect(() => {
     if (!open || !drilldown) return
+    if (isUtilizationMetric(drilldown.metric)) {
+      setLoading(false)
+      setError('')
+      return
+    }
 
     async function fetchSessions() {
       setLoading(true)
@@ -241,6 +305,10 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
   const showEnd = isPauseMetric(metric) || metric === 'login'
   const isOrders = data?.kind === 'orders' || isErpMetric(metric)
   const isMissedCallbacks = isMissedCallbackMetric(metric)
+  const isUtilization = isUtilizationMetric(metric)
+  const utilizationBreakdown = isUtilization
+    ? buildUtilizationBreakdown(drilldown.utilizationInputs)
+    : null
   const showTypeSummary = isPauseMetric(metric) && typeSummary.length > 0
   const activePauseId = typeFilter?.pause || drilldown.pause || ''
   const activePauseName = typeFilter?.pauseName || drilldown.pauseName || ''
@@ -287,6 +355,13 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
               <p className="drilldown-subtitle">{drilldown.operatorName}</p>
             ) : null}
             {drilldown.subtitle ? <p className="drilldown-subtitle">{drilldown.subtitle}</p> : null}
+            {isUtilization && utilizationBreakdown ? (
+              <p className="drilldown-meta">
+                Výsledek <strong>{formatNumber(utilizationBreakdown.reportedPct, 2)} %</strong>
+                {' · '}
+                (K + O×P + Q×R + T×U) / M × 100
+              </p>
+            ) : null}
             {data ? (
               <p className="drilldown-meta">
                 Nalezeno <strong>{data.total.toLocaleString('cs-CZ')}</strong>
@@ -306,7 +381,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
           </button>
         </header>
 
-        {loading && !data ? (
+        {loading && !data && !isUtilization ? (
           <div className="drilldown-status drilldown-loading">
             <div className="drilldown-spinner" />
             Načítání rozpadu...
@@ -314,8 +389,146 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
         ) : null}
         {error ? <div className="drilldown-status danger">{error}</div> : null}
 
-        {data || showTypeSummary ? (
+        {data || showTypeSummary || isUtilization ? (
           <div className="drilldown-body">
+            {isUtilization && utilizationBreakdown ? (
+              <div className="drilldown-orders-pane">
+                <div className="drilldown-table-wrap table-scroll">
+                  <table className="leaderboard-table drilldown-table">
+                    <thead>
+                      <tr>
+                        <th>Položka (Excel)</th>
+                        <th>Hodnota</th>
+                        <th>Čas / součin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <strong>Přihlášení</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.loginSeconds)}</td>
+                        <td>{formatNumber(utilizationBreakdown.loginSeconds, 0)} s</td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>Nečinnost</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.idleSeconds)}</td>
+                        <td>{formatNumber(utilizationBreakdown.idleSeconds, 0)} s</td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>M · Čistý čas</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.cleanSeconds)}</td>
+                        <td>
+                          {formatNumber(utilizationBreakdown.cleanSeconds / 3600, 2)} h ·{' '}
+                          {formatNumber(utilizationBreakdown.cleanSeconds, 0)} s
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>K · Administrativa</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.adminSeconds)}</td>
+                        <td>{formatNumber(utilizationBreakdown.adminSeconds, 0)} s</td>
+                      </tr>
+                      {utilizationBreakdown.adminExceedsClean ? (
+                        <tr>
+                          <td>K použité ve vzorci (max = M)</td>
+                          <td colSpan={2}>
+                            <strong>{formatDuration(utilizationBreakdown.adminUsedSeconds)}</strong>
+                          </td>
+                        </tr>
+                      ) : null}
+                      <tr>
+                        <td>
+                          <strong>O · Odchozí hovory</strong>
+                        </td>
+                        <td>{formatNumber(utilizationBreakdown.outgoingCalls, 0)}×</td>
+                        <td>—</td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>P · Prům. délka odchozího</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.outgoingAvgSeconds)}</td>
+                        <td>{formatNumber(utilizationBreakdown.outgoingAvgSeconds, 1)} s (včetně 0)</td>
+                      </tr>
+                      <tr>
+                        <td>O × P</td>
+                        <td colSpan={2}>
+                          <strong>{formatDuration(utilizationBreakdown.outgoingSeconds)}</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>Q · Příchozí hovory</strong>
+                        </td>
+                        <td>{formatNumber(utilizationBreakdown.incomingCalls, 0)}×</td>
+                        <td>—</td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>R · Prům. délka příchozího</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.incomingAvgSeconds)}</td>
+                        <td>{formatNumber(utilizationBreakdown.incomingAvgSeconds, 1)} s (včetně 0)</td>
+                      </tr>
+                      <tr>
+                        <td>Q × R</td>
+                        <td colSpan={2}>
+                          <strong>{formatDuration(utilizationBreakdown.incomingSeconds)}</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>T · Maily</strong>
+                        </td>
+                        <td>{formatNumber(utilizationBreakdown.emailCount, 0)}×</td>
+                        <td>—</td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>U · Prům. délka mailu</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.emailAvgSeconds)}</td>
+                        <td>{formatNumber(utilizationBreakdown.emailAvgSeconds, 1)} s (včetně 0)</td>
+                      </tr>
+                      <tr>
+                        <td>T × U</td>
+                        <td colSpan={2}>
+                          <strong>{formatDuration(utilizationBreakdown.emailSeconds)}</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>Čitatel (K + O×P + Q×R + T×U)</strong>
+                        </td>
+                        <td>{formatDuration(utilizationBreakdown.numeratorSeconds)}</td>
+                        <td>{formatNumber(utilizationBreakdown.numeratorSeconds, 0)} s</td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <strong>Vytíženost</strong>
+                        </td>
+                        <td colSpan={2}>
+                          <strong>{formatNumber(utilizationBreakdown.reportedPct, 2)} %</strong>
+                          {utilizationBreakdown.rawPct > 100
+                            ? ` · před limitem ${formatNumber(utilizationBreakdown.rawPct, 2)} %`
+                            : ''}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="drilldown-status" style={{ marginTop: 12 }}>
+                  O/Q/T = všechny záznamy. P/R/U = průměr včetně 0 → O×P je skutečný součet dob. Max
+                  100 % kvůli překryvu admin + hovory.
+                </p>
+              </div>
+            ) : null}
             {showTypeSummary ? (
               <aside className="drilldown-summary">
                 <section className="drilldown-summary-block">
@@ -364,6 +577,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
               </aside>
             ) : null}
 
+            {!isUtilization ? (
             <div className="drilldown-orders-pane">
               {!data ? (
                 <div className="drilldown-status drilldown-loading">
@@ -496,6 +710,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
                 </div>
               ) : null}
             </div>
+            ) : null}
           </div>
         ) : null}
       </div>

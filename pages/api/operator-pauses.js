@@ -222,21 +222,18 @@ export default async function handler(req, res) {
           COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'OUT')::int AS outgoing_calls,
           COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'IN')::int AS incoming_calls,
           COUNT(*) FILTER (WHERE c.answered = false)::int AS rejected_calls,
-          AVG(NULLIF(c.duration, 0)) FILTER (
+          -- Průměr včetně 0 → O×P (= počet všech × průměr) = skutečný součet dob
+          AVG(COALESCE(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
-              AND c.duration > 0
           )::float8 AS outgoing_avg_seconds,
-          AVG(NULLIF(c.duration, 0)) FILTER (
+          AVG(COALESCE(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'IN'
-              AND c.duration > 0
           )::float8 AS incoming_avg_seconds,
-          SUM(COALESCE(NULLIF(c.duration, 0), 0)) FILTER (
+          SUM(COALESCE(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
-              AND c.duration > 0
           )::bigint AS outgoing_duration_seconds_sum,
-          SUM(COALESCE(NULLIF(c.duration, 0), 0)) FILTER (
+          SUM(COALESCE(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'IN'
-              AND c.duration > 0
           )::bigint AS incoming_duration_seconds_sum
         FROM call c
         WHERE c.call_time >= $1
@@ -248,9 +245,9 @@ export default async function handler(req, res) {
         SELECT
           e."user" AS operator_id,
           COUNT(*)::int AS email_count,
-          AVG(NULLIF(e.wait_time, 0))::float8 AS email_avg_seconds,
-          SUM(COALESCE(NULLIF(e.wait_time, 0), 0)) FILTER (WHERE e.wait_time > 0)::bigint
-            AS email_wait_seconds_sum
+          -- Průměr včetně 0 → T×U = skutečný součet wait_time
+          AVG(COALESCE(e.wait_time, 0))::float8 AS email_avg_seconds,
+          SUM(COALESCE(e.wait_time, 0))::bigint AS email_wait_seconds_sum
         FROM email e
         WHERE e.time >= $1
           AND e.time <= $2
@@ -291,17 +288,26 @@ export default async function handler(req, res) {
               / ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0))
           ELSE 0
         END AS requests_per_day,
+        -- Excel: (K + O×P + Q×R + T×U) / M × 100
+        -- O/Q/T = všechny záznamy; P/R/U = průměr včetně 0 → O×P = skutečný součet dob.
+        -- K max = M; výsledek max 100 % (překryv admin + hovory).
         CASE
           WHEN (GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0))::bigint > 0
-            THEN (
+            THEN LEAST(
               (
-                COALESCE(p.admin_seconds, 0)
-                + (COALESCE(c.outgoing_calls, 0) * COALESCE(c.outgoing_avg_seconds, 0))
-                + (COALESCE(c.incoming_calls, 0) * COALESCE(c.incoming_avg_seconds, 0))
-                + (COALESCE(e.email_count, 0) * COALESCE(e.email_avg_seconds, 0))
-              )
-              / NULLIF(GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0), 0)::float8
-            ) * 100.0
+                (
+                  LEAST(
+                    COALESCE(p.admin_seconds, 0),
+                    GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)
+                  )
+                  + (COALESCE(c.outgoing_calls, 0) * COALESCE(c.outgoing_avg_seconds, 0))
+                  + (COALESCE(c.incoming_calls, 0) * COALESCE(c.incoming_avg_seconds, 0))
+                  + (COALESCE(e.email_count, 0) * COALESCE(e.email_avg_seconds, 0))
+                )
+                / NULLIF(GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0), 0)::float8
+              ) * 100.0,
+              100.0
+            )
           ELSE 0
         END AS utilization_pct,
         NULL::int AS dopadl_hovor_ano,

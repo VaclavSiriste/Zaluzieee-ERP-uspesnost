@@ -490,7 +490,31 @@ export default function OperatorPausesPage() {
       operatorName: options.operatorName || bubble.operator_name,
       metric,
       title: `${bubble.operator_name} — ${title}`,
-      subtitle
+      subtitle,
+      ...options
+    })
+  }
+
+  function openUtilizationDrilldown(bubble, summary) {
+    openDrilldown({
+      operator: bubble.operator_id,
+      operatorName: bubble.operator_name,
+      metric: 'utilization',
+      title: `${bubble.operator_name} — Vytíženost`,
+      subtitle: 'Vzorec: (K + O×P + Q×R + T×U) / M × 100 · průměr včetně 0',
+      utilizationInputs: {
+        login_seconds: summary.login_seconds,
+        idle_seconds: summary.idle_seconds,
+        admin_seconds: summary.admin_seconds,
+        clean_seconds: summary.clean_seconds,
+        outgoing_calls: summary.outgoing_calls,
+        outgoing_avg_seconds: summary.outgoing_avg_seconds,
+        incoming_calls: summary.incoming_calls,
+        incoming_avg_seconds: summary.incoming_avg_seconds,
+        email_count: summary.email_count,
+        email_avg_seconds: summary.email_avg_seconds,
+        utilization_pct: summary.utilization_pct
+      }
     })
   }
 
@@ -908,14 +932,7 @@ export default function OperatorPausesPage() {
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"
                         disabled={!summary.admin_seconds && !summary.total_calls && !summary.email_count}
-                        onClick={() =>
-                          openMetricDrilldown(
-                            bubble,
-                            'activity',
-                            'Vytíženost',
-                            'Vytíženost = (administrativa + čas hovorů + maily) / čistý čas'
-                          )
-                        }
+                        onClick={() => openUtilizationDrilldown(bubble, summary)}
                       >
                         <span>Vytíženost</span>
                         <strong>{formatPercent(summary.utilization_pct)}</strong>
