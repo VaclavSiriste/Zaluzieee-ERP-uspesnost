@@ -9,9 +9,13 @@ import {
   missedCallbackVariantFilter
 } from '@/lib/missed-call-callback-sql'
 import { resolveDateRange } from '@/lib/metrics-query'
+import fs from 'fs/promises'
+import path from 'path'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
+const CACHE_DIR = path.join(process.cwd(), '.runtime-cache')
+const CACHE_FILE = path.join(CACHE_DIR, 'missed-call-callbacks-last-success.json')
 
 const VARIANT_LABELS = {
   all: 'Všechny zmeškané příchozí',
@@ -58,6 +62,24 @@ async function queryWithRetry(sql, params = [], attempts = 4) {
 function cleanParam(value) {
   if (typeof value !== 'string') return ''
   return value.trim()
+}
+
+async function writeCache(payload) {
+  try {
+    await fs.mkdir(CACHE_DIR, { recursive: true })
+    await fs.writeFile(CACHE_FILE, JSON.stringify(payload), 'utf8')
+  } catch (error) {
+    console.warn('missed-call-callbacks cache write failed:', error.message)
+  }
+}
+
+async function readCache() {
+  try {
+    const raw = await fs.readFile(CACHE_FILE, 'utf8')
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
 }
 
 function mapRow(row) {
@@ -128,12 +150,14 @@ export default async function handler(req, res) {
     }
 
     if (summaryOnly) {
-      return res.status(200).json({
+      const payload = {
         period,
         start: start.toISOString(),
         end: end.toISOString(),
         summary
-      })
+      }
+      await writeCache(payload)
+      return res.status(200).json(payload)
     }
 
     const countSql = `
@@ -188,6 +212,16 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     console.error('missed-call-callbacks:', error.message)
+    if (isTransientDbError(error)) {
+      const cached = await readCache()
+      if (cached && (summaryOnly || variant === 'all')) {
+        return res.status(200).json({
+          ...cached,
+          stale: true,
+          stale_reason: error.message
+        })
+      }
+    }
     return res.status(500).json({ error: error.message || 'Chyba načtení zmeškaných hovorů' })
   }
 }

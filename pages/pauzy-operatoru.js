@@ -122,6 +122,7 @@ export default function OperatorPausesPage() {
   const [syncProgress, setSyncProgress] = useState(null)
   const [syncBusy, setSyncBusy] = useState(false)
   const [missedCallbackSummary, setMissedCallbackSummary] = useState(null)
+  const [missedCallbackLoading, setMissedCallbackLoading] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -264,33 +265,51 @@ export default function OperatorPausesPage() {
     }
   }, [bubbles, directoryOperators.length])
 
-  async function fetchData() {
-    setLoading(true)
-    setError('')
+  async function loadMissedCallbackSummary(params) {
+    setMissedCallbackLoading(true)
+    setMissedCallbackSummary(null)
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 20000)
-      const params = new URLSearchParams({
-        period,
-        ...(startDate ? { startDate } : {}),
-        ...(endDate ? { endDate } : {})
-      })
+      const timeoutId = setTimeout(() => controller.abort(), 90000)
       const summaryParams = new URLSearchParams({
         ...Object.fromEntries(params.entries()),
         summary: '1'
       })
-      const [response, missedResponse] = await Promise.all([
-        fetch(`/api/operator-pauses?${params}`, { signal: controller.signal }),
-        fetch(`/api/missed-call-callbacks?${summaryParams}`, { signal: controller.signal })
-      ])
+      const response = await fetch(`/api/missed-call-callbacks?${summaryParams}`, {
+        signal: controller.signal
+      })
       clearTimeout(timeoutId)
       const data = await response.json()
-      const missedData = missedResponse.ok ? await missedResponse.json() : null
+      if (response.ok && data?.summary) {
+        setMissedCallbackSummary(data.summary)
+      }
+    } catch {
+      setMissedCallbackSummary(null)
+    } finally {
+      setMissedCallbackLoading(false)
+    }
+  }
+
+  async function fetchData() {
+    setLoading(true)
+    setError('')
+    const params = new URLSearchParams({
+      period,
+      ...(startDate ? { startDate } : {}),
+      ...(endDate ? { endDate } : {})
+    })
+    let failed = false
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 20000)
+      const response = await fetch(`/api/operator-pauses?${params}`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      const data = await response.json()
       if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
       setBubbles(data.bubbles || [])
       setSummaryRows(data.summary || [])
-      setMissedCallbackSummary(missedData?.summary || null)
     } catch (err) {
+      failed = true
       if (err.name === 'AbortError') {
         setError('Načítání trvalo příliš dlouho. Zkuste obnovit stránku.')
       } else {
@@ -301,6 +320,9 @@ export default function OperatorPausesPage() {
       setMissedCallbackSummary(null)
     } finally {
       setLoading(false)
+    }
+    if (!failed) {
+      loadMissedCallbackSummary(params)
     }
   }
 
@@ -687,58 +709,76 @@ export default function OperatorPausesPage() {
                   }
                 />
               </article>
-              {missedCallbackSummary ? (
+              {(missedCallbackLoading || missedCallbackSummary) ? (
                 <>
                   <article className="pauses-kpi pauses-kpi-clickable">
                     <span className="pauses-kpi-label">Zmeškané příchozí</span>
-                    <DrilldownCount
-                      count={missedCallbackSummary.total_missed}
-                      className="pauses-kpi-value"
-                      title="Kliknutím zobrazíte výčet zmeškaných hovorů"
-                      onOpen={() =>
-                        openMissedCallbackDrilldown(
-                          'all',
-                          'Zmeškané příchozí hovory',
-                          'Příchozí hovory (answered = Ne) · shoda s navoláním přes posledních 9 číslic'
-                        )
-                      }
-                    />
-                    <span className="pauses-kpi-hint">rozkliknout výčet</span>
+                    {missedCallbackLoading ? (
+                      <strong className="pauses-kpi-value">…</strong>
+                    ) : (
+                      <DrilldownCount
+                        count={missedCallbackSummary.total_missed}
+                        className="pauses-kpi-value"
+                        title="Kliknutím zobrazíte výčet zmeškaných hovorů"
+                        onOpen={() =>
+                          openMissedCallbackDrilldown(
+                            'all',
+                            'Zmeškané příchozí hovory',
+                            'Příchozí hovory (answered = Ne) · shoda s navoláním přes posledních 9 číslic'
+                          )
+                        }
+                      />
+                    )}
+                    <span className="pauses-kpi-hint">
+                      {missedCallbackLoading ? 'počítám…' : 'rozkliknout výčet'}
+                    </span>
                   </article>
                   <article className="pauses-kpi pauses-kpi-clickable">
                     <span className="pauses-kpi-label">Průměrná doba do navolání</span>
-                    <DrilldownCount
-                      count={missedCallbackSummary.called_back}
-                      text={formatHours(missedCallbackSummary.avg_hours_to_callback)}
-                      className="pauses-kpi-value"
-                      title="Kliknutím zobrazíte navolané zmeškané hovory"
-                      onOpen={() =>
-                        openMissedCallbackDrilldown(
-                          'called_back',
-                          'Navolané zmeškané hovory',
-                          'První odchozí hovor na stejné číslo po zmeškání'
-                        )
-                      }
-                    />
+                    {missedCallbackLoading ? (
+                      <strong className="pauses-kpi-value">…</strong>
+                    ) : (
+                      <DrilldownCount
+                        count={missedCallbackSummary.called_back}
+                        text={formatHours(missedCallbackSummary.avg_hours_to_callback)}
+                        className="pauses-kpi-value"
+                        title="Kliknutím zobrazíte navolané zmeškané hovory"
+                        onOpen={() =>
+                          openMissedCallbackDrilldown(
+                            'called_back',
+                            'Navolané zmeškané hovory',
+                            'První odchozí hovor na stejné číslo po zmeškání'
+                          )
+                        }
+                      />
+                    )}
                     <span className="pauses-kpi-hint">
-                      {formatNumber(missedCallbackSummary.called_back, 0)} navoláno
+                      {missedCallbackLoading
+                        ? 'počítám…'
+                        : `${formatNumber(missedCallbackSummary.called_back, 0)} navoláno`}
                     </span>
                   </article>
                   <article className="pauses-kpi pauses-kpi-clickable pauses-kpi-warn">
                     <span className="pauses-kpi-label">Ještě nenavolané</span>
-                    <DrilldownCount
-                      count={missedCallbackSummary.not_called_back}
-                      className="pauses-kpi-value"
-                      title="Kliknutím zobrazíte nenavolané zmeškané hovory"
-                      onOpen={() =>
-                        openMissedCallbackDrilldown(
-                          'open',
-                          'Nenavolané zmeškané hovory',
-                          'Zmeškané příchozí bez následného odchozího hovoru na stejné číslo'
-                        )
-                      }
-                    />
-                    <span className="pauses-kpi-hint">rozkliknout výčet</span>
+                    {missedCallbackLoading ? (
+                      <strong className="pauses-kpi-value">…</strong>
+                    ) : (
+                      <DrilldownCount
+                        count={missedCallbackSummary.not_called_back}
+                        className="pauses-kpi-value"
+                        title="Kliknutím zobrazíte nenavolané zmeškané hovory"
+                        onOpen={() =>
+                          openMissedCallbackDrilldown(
+                            'open',
+                            'Nenavolané zmeškané hovory',
+                            'Zmeškané příchozí bez následného odchozího hovoru na stejné číslo'
+                          )
+                        }
+                      />
+                    )}
+                    <span className="pauses-kpi-hint">
+                      {missedCallbackLoading ? 'počítám…' : 'rozkliknout výčet'}
+                    </span>
                   </article>
                 </>
               ) : null}
