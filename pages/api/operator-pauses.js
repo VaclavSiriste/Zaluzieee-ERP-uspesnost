@@ -301,8 +301,7 @@ export default async function handler(req, res) {
                 + (COALESCE(e.email_count, 0) * COALESCE(e.email_avg_seconds, 0))
               )
               / NULLIF(GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0), 0)::float8
-              ) * 100.0
-            )
+            ) * 100.0
           ELSE 0
         END AS utilization_pct,
         NULL::int AS dopadl_hovor_ano,
