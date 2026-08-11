@@ -1477,7 +1477,7 @@ h6 {
 
 .pauses-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
@@ -1501,6 +1501,22 @@ h6 {
 
 .pauses-kpi-accent .pauses-kpi-value,
 .pauses-kpi-accent .drilldown-trigger {
+  color: #fff !important;
+}
+
+.pauses-kpi-warn {
+  background: linear-gradient(160deg, #9a3412 0%, #ea580c 100%);
+  border-color: transparent;
+  color: #fff7ed;
+}
+
+.pauses-kpi-warn .pauses-kpi-label,
+.pauses-kpi-warn .pauses-kpi-hint {
+  color: rgba(255, 247, 237, 0.82);
+}
+
+.pauses-kpi-warn .pauses-kpi-value,
+.pauses-kpi-warn .drilldown-trigger {
   color: #fff !important;
 }
 

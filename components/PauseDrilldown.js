@@ -41,6 +41,25 @@ function isErpMetric(metric) {
   )
 }
 
+function isMissedCallbackMetric(metric) {
+  return metric === 'missed_callbacks'
+}
+
+function formatHours(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  const hours = Number(value)
+  if (hours < 1) {
+    const minutes = Math.round(hours * 60)
+    return minutes > 0 ? `${minutes} min` : '< 1 min'
+  }
+  if (hours >= 48) {
+    const days = Math.floor(hours / 24)
+    const rest = Math.round(hours % 24)
+    return rest > 0 ? `${days} d ${rest} h` : `${days} d`
+  }
+  return `${hours.toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} h`
+}
+
 function buildQueryParams(drilldown, filters, offset, typeFilter = null) {
   const metric = drilldown.metric || 'pauses'
   const base = {
@@ -75,6 +94,13 @@ function buildQueryParams(drilldown, filters, offset, typeFilter = null) {
     })
   }
 
+  if (isMissedCallbackMetric(metric)) {
+    return new URLSearchParams({
+      ...base,
+      variant: drilldown.missedVariant || 'all'
+    })
+  }
+
   return new URLSearchParams({
     ...base,
     metric,
@@ -89,12 +115,14 @@ function emptyLabel(metric) {
   if (metric === 'emails') return 'Žádné maily v zvoleném období.'
   if (metric === 'rejected') return 'Žádné odmítnuté hovory v zvoleném období.'
   if (metric === 'activity') return 'Žádné hovory ani maily v zvoleném období.'
+  if (metric === 'missed_callbacks') return 'Žádné zmeškané příchozí hovory v zvoleném období.'
   return 'Žádné hovory v zvoleném období.'
 }
 
 function resolveEndpoint(metric, params) {
   if (isPauseMetric(metric)) return `/api/operator-pause-sessions?${params}`
   if (isErpMetric(metric)) return `/api/operator-erp-orders?${params}`
+  if (isMissedCallbackMetric(metric)) return `/api/missed-call-callbacks?${params}`
   return `/api/operator-metric-sessions?${params}`
 }
 
@@ -212,6 +240,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
   const hasMore = data ? data.items.length < data.total : false
   const showEnd = isPauseMetric(metric) || metric === 'login'
   const isOrders = data?.kind === 'orders' || isErpMetric(metric)
+  const isMissedCallbacks = isMissedCallbackMetric(metric)
   const showTypeSummary = isPauseMetric(metric) && typeSummary.length > 0
   const activePauseId = typeFilter?.pause || drilldown.pause || ''
   const activePauseName = typeFilter?.pauseName || drilldown.pauseName || ''
@@ -262,7 +291,12 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
               <p className="drilldown-meta">
                 Nalezeno <strong>{data.total.toLocaleString('cs-CZ')}</strong>
                 {isOrders ? ' leadů' : isPauseMetric(metric) ? ' pauz' : ' záznamů'}
-                {!isOrders ? ` · ${formatDuration(data.duration_seconds || 0)}` : null}
+                {!isOrders && !isMissedCallbacks
+                  ? ` · ${formatDuration(data.duration_seconds || 0)}`
+                  : null}
+                {isMissedCallbacks && data.summary?.avg_hours_to_callback != null
+                  ? ` · průměr do navolání ${formatHours(data.summary.avg_hours_to_callback)}`
+                  : null}
                 {typeFilter?.pauseName ? ` · filtr: ${typeFilter.pauseName}` : null}
               </p>
             ) : null}
@@ -384,6 +418,35 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
                               Systeeem →
                             </a>
                           </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : isMissedCallbacks ? (
+                <div className="drilldown-table-wrap table-scroll">
+                  <table className="leaderboard-table drilldown-table">
+                    <thead>
+                      <tr>
+                        <th>Číslo</th>
+                        <th>Stav</th>
+                        <th>Zmeškáno</th>
+                        <th>Navoláno</th>
+                        <th>Doba do navolání</th>
+                        <th>Operátor (navolání)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.items.map((item) => (
+                        <tr key={`${item.kind}-${item.id}`}>
+                          <td>
+                            <strong>{item.detail || '—'}</strong>
+                          </td>
+                          <td>{item.label}</td>
+                          <td>{formatDateTime(item.start_time)}</td>
+                          <td>{formatDateTime(item.end_time)}</td>
+                          <td>{formatHours(item.hours_to_callback)}</td>
+                          <td>{item.callback_operator_name || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
