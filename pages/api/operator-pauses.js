@@ -224,12 +224,21 @@ export default async function handler(req, res) {
           COUNT(*) FILTER (WHERE c.answered = false)::int AS rejected_calls,
           AVG(NULLIF(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
-              AND c.duration IS NOT NULL
+              AND c.duration > 0
           )::float8 AS outgoing_avg_seconds,
           AVG(NULLIF(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'IN'
-              AND c.duration IS NOT NULL
+              AND c.duration > 0
           )::float8 AS incoming_avg_seconds
+          ,
+          SUM(COALESCE(NULLIF(c.duration, 0), 0)) FILTER (
+            WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
+              AND c.duration > 0
+          )::bigint AS outgoing_duration_seconds_sum,
+          SUM(COALESCE(NULLIF(c.duration, 0), 0)) FILTER (
+            WHERE UPPER(COALESCE(c.direction, '')) = 'IN'
+              AND c.duration > 0
+          )::bigint AS incoming_duration_seconds_sum
         FROM call c
         WHERE c.call_time >= $1
           AND c.call_time <= $2
@@ -240,7 +249,9 @@ export default async function handler(req, res) {
         SELECT
           e."user" AS operator_id,
           COUNT(*)::int AS email_count,
-          AVG(NULLIF(e.wait_time, 0))::float8 AS email_avg_seconds
+          AVG(NULLIF(e.wait_time, 0))::float8 AS email_avg_seconds,
+          SUM(COALESCE(NULLIF(e.wait_time, 0), 0)) FILTER (WHERE e.wait_time > 0)::bigint
+            AS email_wait_seconds_sum
         FROM email e
         WHERE e.time >= $1
           AND e.time <= $2
@@ -269,9 +280,12 @@ export default async function handler(req, res) {
         COALESCE(c.rejected_calls, 0)::int AS rejected_calls,
         COALESCE(c.outgoing_avg_seconds, 0)::float8 AS outgoing_avg_seconds,
         COALESCE(c.incoming_avg_seconds, 0)::float8 AS incoming_avg_seconds,
+        COALESCE(c.outgoing_duration_seconds_sum, 0)::bigint AS outgoing_duration_seconds_sum,
+        COALESCE(c.incoming_duration_seconds_sum, 0)::bigint AS incoming_duration_seconds_sum,
         (COALESCE(c.outgoing_calls, 0) + COALESCE(c.incoming_calls, 0))::int AS total_calls,
         COALESCE(e.email_count, 0)::int AS email_count,
         COALESCE(e.email_avg_seconds, 0)::float8 AS email_avg_seconds,
+        COALESCE(e.email_wait_seconds_sum, 0)::bigint AS email_wait_seconds_sum,
         CASE
           WHEN ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0) > 0
             THEN ((COALESCE(c.outgoing_calls, 0) + COALESCE(c.incoming_calls, 0) + COALESCE(e.email_count, 0))::float8
@@ -279,7 +293,7 @@ export default async function handler(req, res) {
           ELSE 0
         END AS requests_per_day,
         CASE
-          WHEN (GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) > 0
+          WHEN (GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0))::bigint > 0
             THEN (
               (
                 COALESCE(p.admin_seconds, 0)
@@ -287,8 +301,9 @@ export default async function handler(req, res) {
                 + (COALESCE(c.incoming_calls, 0) * COALESCE(c.incoming_avg_seconds, 0))
                 + (COALESCE(e.email_count, 0) * COALESCE(e.email_avg_seconds, 0))
               )
-              / ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3600.0)
-            ) * 100.0
+              / NULLIF(GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0), 0)::float8
+              ) * 100.0
+            )
           ELSE 0
         END AS utilization_pct,
         NULL::int AS dopadl_hovor_ano,
@@ -410,10 +425,13 @@ export default async function handler(req, res) {
           incoming_calls: incomingCalls,
           outgoing_avg_seconds: Number(row.outgoing_avg_seconds) || 0,
           incoming_avg_seconds: Number(row.incoming_avg_seconds) || 0,
+          outgoing_duration_seconds_sum: Number(row.outgoing_duration_seconds_sum) || 0,
+          incoming_duration_seconds_sum: Number(row.incoming_duration_seconds_sum) || 0,
           total_calls: totalCalls,
           rejected_calls: Number(row.rejected_calls) || 0,
           email_count: emailCount,
           email_avg_seconds: Number(row.email_avg_seconds) || 0,
+          email_wait_seconds_sum: Number(row.email_wait_seconds_sum) || 0,
           requests_per_day: Number(row.requests_per_day) || 0,
           utilization_pct: Number(row.utilization_pct) || 0,
           dopadl_hovor_ano: dopadlHovorAno,
