@@ -229,8 +229,7 @@ export default async function handler(req, res) {
           AVG(NULLIF(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'IN'
               AND c.duration > 0
-          )::float8 AS incoming_avg_seconds
-          ,
+          )::float8 AS incoming_avg_seconds,
           SUM(COALESCE(NULLIF(c.duration, 0), 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
               AND c.duration > 0
