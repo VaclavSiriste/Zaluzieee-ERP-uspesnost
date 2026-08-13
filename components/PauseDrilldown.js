@@ -648,6 +648,7 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
                         <th>Navoláno</th>
                         <th>Doba do navolání</th>
                         <th>Operátor (navolání)</th>
+                        <th>Detail</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -655,12 +656,31 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
                         <tr key={`${item.kind}-${item.id}`}>
                           <td>
                             <strong>{item.detail || '—'}</strong>
+                            {item.customer_name ? (
+                              <small style={{ display: 'block', opacity: 0.75 }}>
+                                {item.customer_name}
+                              </small>
+                            ) : null}
                           </td>
                           <td>{item.label}</td>
                           <td>{formatDateTime(item.start_time)}</td>
                           <td>{formatDateTime(item.end_time)}</td>
                           <td>{formatHours(item.hours_to_callback)}</td>
                           <td>{item.callback_operator_name || '—'}</td>
+                          <td>
+                            {item.detail_url ? (
+                              <a
+                                href={item.detail_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="drilldown-detail-link"
+                              >
+                                Systeeem →
+                              </a>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

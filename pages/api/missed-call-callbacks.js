@@ -4,6 +4,7 @@
  */
 
 import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
+import { lookupOrdersByPhoneKeys, phoneKeyFromClid } from '@/lib/erp-phone-orders'
 import {
   MISSED_CALLBACK_CTE,
   missedCallbackVariantFilter
@@ -82,7 +83,7 @@ async function readCache() {
   }
 }
 
-function mapRow(row) {
+function mapRow(row, orderMatch = null) {
   const hours = row.hours_to_callback != null ? Number(row.hours_to_callback) : null
   return {
     id: row.missed_id,
@@ -95,7 +96,10 @@ function mapRow(row) {
     hours_to_callback: hours,
     callback_operator_id: row.callback_user || null,
     callback_operator_name: row.callback_operator_name || null,
-    operator_name: row.callback_operator_name || '—'
+    operator_name: row.callback_operator_name || '—',
+    order_id: orderMatch?.order_id || null,
+    customer_name: orderMatch?.customer_name || null,
+    detail_url: orderMatch?.detail_url || null
   }
 }
 
@@ -194,7 +198,12 @@ export default async function handler(req, res) {
       LIMIT $3 OFFSET $4
     `
     const listResult = await queryWithRetry(listSql, [...params, parsedLimit, parsedOffset])
-    const items = listResult.rows.map(mapRow)
+    const phoneKeys = listResult.rows.map((row) => phoneKeyFromClid(row.clid))
+    const orderByPhone = await lookupOrdersByPhoneKeys(phoneKeys)
+    const items = listResult.rows.map((row) => {
+      const key = phoneKeyFromClid(row.clid)
+      return mapRow(row, key ? orderByPhone.get(key) || null : null)
+    })
     const durationSeconds = items.reduce((sum, item) => sum + (item.duration_seconds || 0), 0)
 
     return res.status(200).json({

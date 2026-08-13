@@ -25,6 +25,9 @@ export default function AppMenu({ active = 'dashboard' }) {
           <li className={active === 'operatorPauses' ? 'active' : ''}>
             <Link href="/pauzy-operatoru">Činnosti operátorů</Link>
           </li>
+          <li className={active === 'attendance' ? 'active' : ''}>
+            <Link href="/dochazka">Příchody a odchody</Link>
+          </li>
           <li className={active === 'sla' ? 'active' : ''}>
             <Link href="/vycet-sla">Výčet SLA</Link>
           </li>
