@@ -1725,6 +1725,66 @@ h6 {
   opacity: 0.72;
 }
 
+.pauses-summary-item.pauses-util-low {
+  background: linear-gradient(180deg, #fef2f2 0%, #fecaca 100%);
+  border-color: #f87171;
+}
+
+.pauses-summary-item.pauses-util-low span,
+.pauses-summary-item.pauses-util-low small {
+  color: #991b1b;
+}
+
+.pauses-summary-item.pauses-util-low strong {
+  color: #7f1d1d;
+}
+
+.pauses-summary-item.pauses-util-mid {
+  background: linear-gradient(180deg, #fff7ed 0%, #fed7aa 100%);
+  border-color: #fb923c;
+}
+
+.pauses-summary-item.pauses-util-mid span,
+.pauses-summary-item.pauses-util-mid small {
+  color: #9a3412;
+}
+
+.pauses-summary-item.pauses-util-mid strong {
+  color: #7c2d12;
+}
+
+.pauses-summary-item.pauses-util-high {
+  background: linear-gradient(180deg, #f0fdf4 0%, #bbf7d0 100%);
+  border-color: #4ade80;
+}
+
+.pauses-summary-item.pauses-util-high span,
+.pauses-summary-item.pauses-util-high small {
+  color: #166534;
+}
+
+.pauses-summary-item.pauses-util-high strong {
+  color: #14532d;
+}
+
+.pauses-summary-clickable.pauses-util-low:not(:disabled):hover,
+.pauses-summary-clickable.pauses-util-low:not(:disabled):focus-visible {
+  border-color: #ef4444;
+  background: linear-gradient(180deg, #fee2e2 0%, #fca5a5 100%);
+}
+
+.pauses-summary-clickable.pauses-util-mid:not(:disabled):hover,
+.pauses-summary-clickable.pauses-util-mid:not(:disabled):focus-visible {
+  border-color: #f97316;
+  background: linear-gradient(180deg, #ffedd5 0%, #fdba74 100%);
+}
+
+.pauses-summary-clickable.pauses-util-high:not(:disabled):hover,
+.pauses-summary-clickable.pauses-util-high:not(:disabled):focus-visible {
+  border-color: #22c55e;
+  background: linear-gradient(180deg, #dcfce7 0%, #86efac 100%);
+}
+
 .pauses-stat {
   border: 1px solid #e2e8f0;
   border-radius: 14px;

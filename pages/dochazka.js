@@ -1,7 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
+import OperatorDirectory from '@/components/OperatorDirectory'
 import { getMonthToDateRange } from '@/lib/metrics-query'
+import {
+  TEAM_IDS,
+  TEAM_OPTIONS,
+  operatorMatchesTeamFilter,
+  readActiveTeamFilter,
+  readTeamAssignments,
+  writeActiveTeamFilter,
+  writeTeamAssignments
+} from '@/lib/operator-teams'
+
+const HIDDEN_OPERATORS_KEY = 'prvni.attendance.hiddenOperators'
+
+function readHiddenOperators() {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(HIDDEN_OPERATORS_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+function writeHiddenOperators(ids) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(HIDDEN_OPERATORS_KEY, JSON.stringify(ids))
+}
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -27,6 +55,46 @@ export default function DochazkaPage() {
   const [error, setError] = useState('')
   const [savingKey, setSavingKey] = useState('')
   const [message, setMessage] = useState('')
+  const [directoryOpen, setDirectoryOpen] = useState(false)
+  const [directoryOperators, setDirectoryOperators] = useState([])
+  const [hiddenIds, setHiddenIds] = useState([])
+  const [teamAssignments, setTeamAssignments] = useState({})
+  const [activeTeam, setActiveTeam] = useState(TEAM_IDS.ALL)
+
+  useEffect(() => {
+    setHiddenIds(readHiddenOperators())
+    setTeamAssignments(readTeamAssignments())
+    setActiveTeam(readActiveTeamFilter())
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadOperators() {
+      try {
+        const response = await fetch('/api/daktela-operators')
+        const data = await response.json()
+        if (!response.ok || data.error) throw new Error(data.error)
+        if (!cancelled) setDirectoryOperators(data.operators || [])
+      } catch {
+        /* fallback built from items below */
+      }
+    }
+    loadOperators()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!directoryOperators.length && items.length) {
+      const seen = new Map()
+      for (const item of items) {
+        const id = String(item.operator_id)
+        if (!seen.has(id)) {
+          seen.set(id, { operator_id: item.operator_id, operator_name: item.operator_name, email: null })
+        }
+      }
+      setDirectoryOperators(Array.from(seen.values()))
+    }
+  }, [items, directoryOperators.length])
 
   useEffect(() => {
     fetchData()
@@ -117,6 +185,75 @@ export default function DochazkaPage() {
     }
   }
 
+  function persistHidden(nextIds) {
+    setHiddenIds(nextIds)
+    writeHiddenOperators(nextIds)
+  }
+
+  function persistTeamAssignments(nextAssignments) {
+    setTeamAssignments(nextAssignments)
+    writeTeamAssignments(nextAssignments)
+  }
+
+  function handleTeamFilterChange(teamId) {
+    setActiveTeam(teamId)
+    writeActiveTeamFilter(teamId)
+  }
+
+  function assignOperatorTeam(operatorId, teamId) {
+    const id = String(operatorId)
+    if (!id) return
+    persistTeamAssignments({ ...teamAssignments, [id]: teamId })
+  }
+
+  function toggleHidden(operatorId) {
+    const id = String(operatorId)
+    if (hiddenIds.includes(id)) {
+      persistHidden(hiddenIds.filter((item) => item !== id))
+    } else {
+      persistHidden([...hiddenIds, id])
+    }
+  }
+
+  function showAllOperators() {
+    persistHidden([])
+  }
+
+  function hideAllOperators() {
+    const ids = directoryOperators.map((op) => String(op.operator_id)).filter(Boolean)
+    persistHidden(ids)
+  }
+
+  const hiddenSet = useMemo(() => new Set(hiddenIds.map(String)), [hiddenIds])
+
+  const filteredItems = useMemo(
+    () =>
+      items.filter((item) => {
+        if (hiddenSet.has(String(item.operator_id))) return false
+        return operatorMatchesTeamFilter(item, activeTeam, teamAssignments)
+      }),
+    [items, hiddenSet, activeTeam, teamAssignments]
+  )
+
+  const activeIds = useMemo(
+    () => [...new Set(items.map((item) => String(item.operator_id)))],
+    [items]
+  )
+
+  const directoryList = useMemo(() => {
+    const byId = new Map()
+    for (const op of directoryOperators) {
+      byId.set(String(op.operator_id), op)
+    }
+    for (const item of items) {
+      const id = String(item.operator_id)
+      if (!byId.has(id)) {
+        byId.set(id, { operator_id: item.operator_id, operator_name: item.operator_name, email: null })
+      }
+    }
+    return Array.from(byId.values())
+  }, [directoryOperators, items])
+
   return (
     <main className="dashboard-container pauses-page">
       <div className="dashboard-layout">
@@ -131,9 +268,34 @@ export default function DochazkaPage() {
                 ready sessions; po uložení se hodnota zapíše do tabulky{' '}
                 <code>employee_attendance</code> a přepíše návrh.
               </p>
+              <div className="pauses-hero-actions">
+                <button
+                  type="button"
+                  className="pauses-directory-btn"
+                  onClick={() => setDirectoryOpen(true)}
+                >
+                  Číselník operátorů
+                  {hiddenIds.length > 0 ? (
+                    <span className="pauses-directory-badge">{hiddenIds.length} skrytých</span>
+                  ) : null}
+                </button>
+              </div>
             </div>
             <div className="pauses-hero-glow" aria-hidden="true" />
           </header>
+
+          <div className="pauses-team-switch" role="group" aria-label="Přepínání týmů">
+            {TEAM_OPTIONS.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                className={`pauses-team-btn${activeTeam === team.id ? ' is-active' : ''}`}
+                onClick={() => handleTeamFilterChange(team.id)}
+              >
+                {team.label}
+              </button>
+            ))}
+          </div>
 
           <FilterAssistant
             period={period}
@@ -170,11 +332,15 @@ export default function DochazkaPage() {
             </section>
           ) : null}
 
-          {!loading && !error && items.length === 0 ? (
-            <div className="pauses-empty">Pro zvolené období nejsou žádné záznamy.</div>
+          {!loading && !error && filteredItems.length === 0 ? (
+            <div className="pauses-empty">
+              {items.length > 0
+                ? 'Všichni operátoři jsou skrytí nebo neodpovídají filtru týmu. Otevřete číselník.'
+                : 'Pro zvolené období nejsou žádné záznamy.'}
+            </div>
           ) : null}
 
-          {!loading && items.length > 0 ? (
+          {!loading && filteredItems.length > 0 ? (
             <div className="drilldown-table-wrap table-scroll attendance-table-wrap">
               <table className="leaderboard-table drilldown-table attendance-table">
                 <thead>
@@ -189,7 +355,7 @@ export default function DochazkaPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => {
+                  {filteredItems.map((item) => {
                     const key = `${item.operator_id}|${item.work_date}`
                     const draft = drafts[key] || {}
                     const dirty =
@@ -261,6 +427,19 @@ export default function DochazkaPage() {
           ) : null}
         </div>
       </div>
+
+      <OperatorDirectory
+        open={directoryOpen}
+        onClose={() => setDirectoryOpen(false)}
+        operators={directoryList}
+        hiddenIds={hiddenIds}
+        activeIds={activeIds}
+        onToggleHidden={toggleHidden}
+        onShowAll={showAllOperators}
+        onHideAll={hideAllOperators}
+        teamAssignments={teamAssignments}
+        onAssignTeam={assignOperatorTeam}
+      />
     </main>
   )
 }

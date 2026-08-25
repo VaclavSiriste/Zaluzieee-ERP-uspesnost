@@ -39,6 +39,15 @@ function formatPercent(value) {
   return `${formatNumber(value, 2)} %`
 }
 
+/** Barevné pozadí vytíženosti: &lt;60 % červená, 60–75 % oranžová, &gt;75 % zelená. */
+function utilizationToneClass(value) {
+  if (value == null || Number.isNaN(Number(value))) return ''
+  const pct = Number(value)
+  if (pct < 60) return 'pauses-util-low'
+  if (pct <= 75) return 'pauses-util-mid'
+  return 'pauses-util-high'
+}
+
 function formatHours(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
   const hours = Number(value)
@@ -890,10 +899,34 @@ export default function OperatorPausesPage() {
                     <div className="pauses-summary-grid">
                       {/*
                         Skryté v UI (počíta se dál v API):
-                        Doba přihlášení, Administrativa, Nečinnost, Čistý čas,
+                        Doba přihlášení, Čistý čas,
                         Odchozí/Příchozí/Hovory celkem, Maily,
                         Dopadl hovor ANO, Domluveno zaměření ANO, ERP hovory, ANO
                       */}
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.admin_seconds}
+                        onClick={() =>
+                          openMetricDrilldown(bubble, 'admin', 'Administrativa')
+                        }
+                      >
+                        <span>Administrativa</span>
+                        <strong>{formatDuration(summary.admin_seconds)}</strong>
+                        <small>rozkliknout pauzy</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.idle_seconds}
+                        onClick={() =>
+                          openMetricDrilldown(bubble, 'idle', 'Nečinnost')
+                        }
+                      >
+                        <span>Nečinnost</span>
+                        <strong>{formatDuration(summary.idle_seconds)}</strong>
+                        <small>rozkliknout pauzy</small>
+                      </button>
                       <button
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"
@@ -930,13 +963,69 @@ export default function OperatorPausesPage() {
                       </button>
                       <button
                         type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
+                        className={[
+                          'pauses-summary-item',
+                          'pauses-summary-clickable',
+                          utilizationToneClass(summary.utilization_pct)
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                         disabled={!summary.admin_seconds && !summary.total_calls && !summary.email_count}
                         onClick={() => openUtilizationDrilldown(bubble, summary)}
                       >
                         <span>Vytíženost</span>
                         <strong>{formatPercent(summary.utilization_pct)}</strong>
                         <small>rozkliknout podklady</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.dopadl_hovor_pocet}
+                        onClick={() =>
+                          openMetricDrilldown(
+                            bubble,
+                            'dopadl_hovor_pocet',
+                            'Úspěšnost navolání',
+                            'ERP · Dopadl hovor ANO / (ANO + NE) · stejný časový filtr jako ostatní metriky',
+                            {
+                              operatorName:
+                                summary.erp_operator_name || bubble.operator_name
+                            }
+                          )
+                        }
+                      >
+                        <span>Úspěšnost navolání</span>
+                        <strong>{formatPercent(summary.success_navolani_pct)}</strong>
+                        <small>
+                          {formatNumber(summary.dopadl_hovor_ano, 0)} ANO /{' '}
+                          {formatNumber(summary.dopadl_hovor_pocet, 0)}
+                        </small>
+                      </button>
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.domluveno_zamereni_pocet}
+                        onClick={() =>
+                          openMetricDrilldown(
+                            bubble,
+                            'domluveno_zamereni_pocet',
+                            'Úspěšnost natrasování',
+                            'ERP · Naplánován termín zaměření ANO / (ANO + NE) · stejný časový filtr',
+                            {
+                              operatorName:
+                                summary.domluveno_operator_name ||
+                                summary.erp_operator_name ||
+                                bubble.operator_name
+                            }
+                          )
+                        }
+                      >
+                        <span>Úspěšnost natrasování</span>
+                        <strong>{formatPercent(summary.success_natrasovani_pct)}</strong>
+                        <small>
+                          {formatNumber(summary.domluveno_zamereni_ano, 0)} ANO /{' '}
+                          {formatNumber(summary.domluveno_zamereni_pocet, 0)}
+                        </small>
                       </button>
                       <button
                         type="button"

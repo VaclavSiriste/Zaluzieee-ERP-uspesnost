@@ -398,9 +398,15 @@ export default async function handler(req, res) {
         const erpHovory = erpHovoryByKey.get(normalizeOperatorKey(row.operator_name))
         const chyby = chybyByKey.get(normalizeOperatorKey(row.operator_name))
         const dopadlHovorAno = dopadl ? dopadl.dopadl_hovor_ano : 0
-        const dopadlHovorPocet = dopadl ? dopadl.dopadl_hovor_pocet : 0
+        const dopadlHovorNe = dopadl ? dopadl.dopadl_hovor_ne : 0
+        const dopadlHovorPocet = dopadl
+          ? dopadl.dopadl_hovor_pocet
+          : dopadlHovorAno + dopadlHovorNe
         const domluvenoZamereniAno = domluveno ? domluveno.domluveno_zamereni_ano : 0
-        const domluvenoZamereniPocet = domluveno ? domluveno.domluveno_zamereni_pocet : 0
+        const domluvenoZamereniNe = domluveno ? domluveno.domluveno_zamereni_ne : 0
+        const domluvenoZamereniPocet = domluveno
+          ? domluveno.domluveno_zamereni_pocet
+          : domluvenoZamereniAno + domluvenoZamereniNe
         const erpHovoryAno = erpHovory ? erpHovory.erp_hovory_ano : 0
         const erpHovoryPocet = erpHovory ? erpHovory.erp_hovory_pocet : 0
         const pocetChyb = chyby ? chyby.pocet_chyb : 0
@@ -439,12 +445,22 @@ export default async function handler(req, res) {
           requests_per_day: Number(row.requests_per_day) || 0,
           utilization_pct: Number(row.utilization_pct) || 0,
           dopadl_hovor_ano: dopadlHovorAno,
+          dopadl_hovor_ne: dopadlHovorNe,
           dopadl_hovor_pocet: dopadlHovorPocet,
           domluveno_zamereni_ano: domluvenoZamereniAno,
+          domluveno_zamereni_ne: domluvenoZamereniNe,
           domluveno_zamereni_pocet: domluvenoZamereniPocet,
           erp_hovory_ano: erpHovoryAno,
           erp_hovory_pocet: erpHovoryPocet,
           pocet_chyb: pocetChyb,
+          // ERP: Dopadl hovor ANO / (ANO+NE)
+          success_navolani_pct:
+            dopadlHovorPocet > 0 ? (dopadlHovorAno / dopadlHovorPocet) * 100 : null,
+          // ERP: Naplánován termín zaměření ANO / (ANO+NE)
+          success_natrasovani_pct:
+            domluvenoZamereniPocet > 0
+              ? (domluvenoZamereniAno / domluvenoZamereniPocet) * 100
+              : null,
           // Looker: Dopadl hovor ANO / odchozí hovory (Daktela)
           success_dopadl_hovor_pct:
             outgoingCalls > 0 ? (dopadlHovorAno / outgoingCalls) * 100 : null,
