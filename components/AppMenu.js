@@ -31,6 +31,18 @@ export default function AppMenu({ active = 'dashboard' }) {
           <li className={active === 'sla' ? 'active' : ''}>
             <Link href="/vycet-sla">Výčet SLA</Link>
           </li>
+          <li className={active === 'targets' ? 'active' : ''}>
+            <Link href="/targety">Targety</Link>
+          </li>
+        </ul>
+      </div>
+
+      <div className="menu-block">
+        <div className="menu-block-title">Provoz</div>
+        <ul>
+          <li className={active === 'operations' ? 'active' : ''}>
+            <Link href="/rizeni-provozu">zaluzieee - CZ</Link>
+          </li>
         </ul>
       </div>
 
