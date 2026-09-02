@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import MetricInfoTip from '@/components/MetricInfoTip'
 
 const DATE_BASIS_OPTIONS = [
   { key: 'created', label: 'Datum vytvoření' },
@@ -34,7 +35,8 @@ export default function FilterAssistant({
   region = '',
   onRegionChange,
   regions = [],
-  hideDateBasis = false
+  hideDateBasis = false,
+  metricHelpId = ''
 }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -186,7 +188,10 @@ export default function FilterAssistant({
             </svg>
           </span>
           <span className="filter-assistant-trigger-text">
-            <strong>Filtry</strong>
+            <strong>
+              Filtry
+              {metricHelpId ? <MetricInfoTip helpId={metricHelpId} label="Popis období filtru" /> : null}
+            </strong>
             <span>{activeSummary}</span>
           </span>
         </button>

@@ -2509,8 +2509,122 @@ h6 {
 }
 
 .sla-block-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   color: #1e2a52;
   font-size: 1.05rem;
+}
+
+.metric-label-with-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metric-info-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.metric-info-tip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+}
+
+.metric-info-tip-popup {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: min(320px, 78vw);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: pre-line;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.metric-info-tip-popup::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #0f172a;
+}
+
+.metric-info-tip:hover .metric-info-tip-popup,
+.metric-info-tip:focus-within .metric-info-tip-popup {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sla-queue-breakdown-title,
+.navolani-operator-title,
+.ops-targets-column-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sla-queue-breakdown-hint-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.navolani-operator-pct-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: #047857;
+}
+
+.targets-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ops-targets-row-metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-assistant-trigger-text strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .sla-kpi-sub,
@@ -2692,6 +2806,11 @@ h6 {
 
 @media (max-width: 700px) {
   .sla-kpi-breakdown {
+    grid-template-columns: 1fr;
+  }
+
+  .sla-queue-breakdown-grid,
+  .sla-queue-breakdown-grid--wide {
     grid-template-columns: 1fr;
   }
 }

@@ -16,6 +16,7 @@ import {
 } from '@/lib/targets-storage'
 import { syncTargetsCompletedFromErp } from '@/lib/sync-targets-completed'
 import { sortTechnicians } from '@/lib/technician-targets'
+import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 
 function formatNumber(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
@@ -44,11 +45,14 @@ function computeProgressPct(targetRaw, completedRaw) {
   return null
 }
 
-function BreakdownList({ title, rows, values, completed }) {
+function BreakdownList({ title, rows, values, completed, helpId }) {
   if (!rows.length) {
     return (
       <section className="ops-targets-column">
-        <h3 className="ops-targets-column-title">{title}</h3>
+        <h3 className="ops-targets-column-title">
+          {title}
+          {helpId ? <MetricInfoTip helpId={helpId} /> : null}
+        </h3>
         <p className="ops-targets-empty">Žádné aktivní položky pro tento měsíc.</p>
       </section>
     )
@@ -56,7 +60,10 @@ function BreakdownList({ title, rows, values, completed }) {
 
   return (
     <section className="ops-targets-column">
-      <h3 className="ops-targets-column-title">{title}</h3>
+      <h3 className="ops-targets-column-title">
+        {title}
+        {helpId ? <MetricInfoTip helpId={helpId} /> : null}
+      </h3>
       <div className="ops-targets-list">
         {rows.map((row) => {
           const targetValue = values[row.id] ?? ''
@@ -68,11 +75,18 @@ function BreakdownList({ title, rows, values, completed }) {
               <div className="ops-targets-row-metrics">
                 <span>
                   Cíl: <b>{formatNumber(parseTargetNumber(targetValue))}</b>
+                  <MetricInfoTip helpId={helpId === 'targets_technik' ? 'targets_technik' : 'targets_kraj'} label="Popis cíle" />
                 </span>
                 <span>
                   Splněno: <b>{formatNumber(parseTargetNumber(completedValue))}</b>
+                  <MetricInfoTip helpId={helpId === 'targets_technik' ? 'targets_technik' : 'targets_kraj'} label="Popis splněno" />
                 </span>
-                {pct != null ? <span className="ops-targets-row-pct">{pct} %</span> : null}
+                {pct != null ? (
+                  <span className="ops-targets-row-pct">
+                    {pct} %
+                    <MetricInfoTip helpId="targets_celkem" />
+                  </span>
+                ) : null}
               </div>
             </article>
           )
@@ -207,7 +221,10 @@ export default function OperationsTargetsPanel({
 
   return (
     <section className={`sla-block sla-block-nested sla-block-targets${expanded ? ' is-expanded' : ''}`}>
-      <h2 className="sla-block-title">Target celkem</h2>
+      <h2 className="sla-block-title">
+        Target celkem
+        <MetricInfoTip helpId="targets_celkem" />
+      </h2>
       <p className="sla-block-desc">
         {expanded
           ? `Nastavte celkový cíl a splnění pro ${brandLabel}. Splněno techniků/krajů se počítá z ERP (datum zaměření${
@@ -223,9 +240,9 @@ export default function OperationsTargetsPanel({
         onClick={() => setExpanded((open) => !open)}
         aria-expanded={expanded}
       >
-        <span className="sla-kpi-label">
+        <MetricLabel helpId="targets_celkem" className="sla-kpi-label">
           Target celkem · {brandLabel} · {formatMonthLabel(monthKey)}
-        </span>
+        </MetricLabel>
         <strong className="sla-kpi-value">
           {summaryPct != null ? `${summaryPct} %` : '—'}
         </strong>
@@ -295,7 +312,10 @@ export default function OperationsTargetsPanel({
 
           <div className="ops-targets-overall">
             <label className="targets-map-editor-field">
-              <span>Cíl celkem (kolik)</span>
+              <span className="targets-field-label">
+                Cíl celkem (kolik)
+                <MetricInfoTip helpId="targets_cil_celkem" />
+              </span>
               <TargetBarInput
                 value={operations.target}
                 fillPct={targetFillPct}
@@ -304,7 +324,10 @@ export default function OperationsTargetsPanel({
               />
             </label>
             <label className="targets-map-editor-field">
-              <span>Splněno celkem</span>
+              <span className="targets-field-label">
+                Splněno celkem
+                <MetricInfoTip helpId="targets_splneno_celkem" />
+              </span>
               <TargetBarInput
                 value={operations.completed}
                 fillPct={completedFillPct}
@@ -322,6 +345,7 @@ export default function OperationsTargetsPanel({
                 rows={regionRows}
                 values={regions.values}
                 completed={regions.completed}
+                helpId="targets_kraj"
               />
             ) : (
               <BreakdownList
@@ -329,6 +353,7 @@ export default function OperationsTargetsPanel({
                 rows={techRows}
                 values={tech.values}
                 completed={tech.completed}
+                helpId="targets_technik"
               />
             )}
           </div>

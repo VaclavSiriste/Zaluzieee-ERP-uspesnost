@@ -6,6 +6,7 @@ import ErpNavolaniDrilldown from '@/components/ErpNavolaniDrilldown'
 import FilterAssistant from '@/components/FilterAssistant'
 import IncomingLineSlaDrilldown from '@/components/IncomingLineSlaDrilldown'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
+import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import { OPERATIONS_BRANDS } from '@/lib/operations-brands'
 
 function formatPercent(value) {
@@ -39,18 +40,21 @@ function buildBreakdownItems(metrics) {
       metric: 'all',
       title: 'Všechny příchozí linky',
       label: 'Příchozích linek',
+      helpId: 'sla_total_incoming',
       count: metrics.total_incoming
     },
     {
       metric: 'answered',
       title: 'Zvednuté hovory',
       label: 'Zvednuto',
+      helpId: 'sla_answered',
       count: metrics.answered
     },
     {
       metric: 'sla_20s',
       title: 'Hovory do 20 s',
       label: 'Do 20 s (SLA)',
+      helpId: 'sla_20s',
       count: metrics.sla_20s,
       hint: formatPercent(metrics.sla_20s_pct)
     },
@@ -58,6 +62,7 @@ function buildBreakdownItems(metrics) {
       metric: 'interval_0_20',
       title: 'Interval 0–20 s',
       label: '0–20 s',
+      helpId: 'sla_interval_0_20',
       count: metrics.intervals.interval_0_20,
       hint: formatPercent(metrics.sla_20s_pct)
     },
@@ -65,24 +70,28 @@ function buildBreakdownItems(metrics) {
       metric: 'interval_21_40',
       title: 'Interval 21–40 s',
       label: '21–40 s',
+      helpId: 'sla_interval_21_40',
       count: metrics.intervals.interval_21_40
     },
     {
       metric: 'interval_41_60',
       title: 'Interval 41–60 s',
       label: '41–60 s',
+      helpId: 'sla_interval_41_60',
       count: metrics.intervals.interval_41_60
     },
     {
       metric: 'interval_60_plus',
       title: 'Interval nad 60 s',
       label: 'Nad 60 s',
+      helpId: 'sla_interval_60_plus',
       count: metrics.intervals.interval_60_plus
     },
     {
       metric: 'missed',
       title: 'Nezvednuté / zmeškané',
       label: 'Nezvednuté',
+      helpId: 'sla_missed',
       count: metrics.missed
     }
   ]
@@ -257,6 +266,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               setPeriod('custom')
             }}
             hideDateBasis
+            metricHelpId="filter_obdobi"
           />
 
           {loading && navolaniLoading ? (
@@ -289,7 +299,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
 
           {!loading && !error && metrics ? (
             <section className={`sla-block sla-block-nested${breakdownOpen ? ' is-expanded' : ''}`}>
-              <h2 className="sla-block-title">SLA příchozí linky — do 20 s</h2>
+              <h2 className="sla-block-title">
+                SLA příchozí linky — do 20 s
+                <MetricInfoTip helpId="sla_celkem" />
+              </h2>
               <p className="sla-block-desc">
                 {slaFilterRange
                   ? `Období filtru: ${formatFilterRange(slaFilterRange.startDate, slaFilterRange.endDate)}. `
@@ -305,7 +318,9 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 onClick={() => setBreakdownOpen((open) => !open)}
                 aria-expanded={breakdownOpen}
               >
-                <span className="sla-kpi-label">SLA celkem</span>
+                <MetricLabel helpId="sla_celkem" className="sla-kpi-label">
+                  SLA celkem
+                </MetricLabel>
                 <strong className="sla-kpi-value">{formatPercent(metrics.sla_20s_pct)}</strong>
                 <span className="sla-kpi-hint">
                   {metrics.sla_20s.toLocaleString('cs-CZ')} /{' '}
@@ -313,6 +328,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                   {slaIncomingQueueLabel ? ` (${slaIncomingQueueLabel})` : ''}
                   {' · '}
                   průměr {formatSeconds(metrics.avg_response_seconds)}
+                  <MetricInfoTip helpId="sla_avg_response" />
                 </span>
                 <span className="sla-kpi-root-toggle">{breakdownOpen ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
               </button>
@@ -323,6 +339,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                     <div className="sla-queue-breakdown" aria-label="Rozpad podle front Daktela">
                       <p className="sla-queue-breakdown-title">
                         Fronty Daktela
+                        <MetricInfoTip helpId="sla_queue_fronty" />
                         {slaFilterRange
                           ? ` · ${formatFilterRange(slaFilterRange.startDate, slaFilterRange.endDate)}`
                           : ''}
@@ -337,23 +354,35 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                             <span className="sla-queue-breakdown-label">
                               {item.label}
                               {item.counts_for_sla ? (
-                                <span className="sla-queue-breakdown-badge">SLA</span>
+                                <span className="sla-queue-breakdown-badge">
+                                  SLA
+                                  <MetricInfoTip helpId="sla_queue_sla_badge" />
+                                </span>
                               ) : null}
+                              <MetricInfoTip helpId="sla_queue_calls" label="Popis fronty Daktela" />
                             </span>
                             <strong className="sla-queue-breakdown-value">
                               {item.total_calls.toLocaleString('cs-CZ')}
                             </strong>
                             <span className="sla-queue-breakdown-hint">
-                              {item.answered.toLocaleString('cs-CZ')} zvednutých ({formatPercent(item.answered_pct)})
+                              <span className="sla-queue-breakdown-hint-part">
+                                {item.answered.toLocaleString('cs-CZ')} zvednutých ({formatPercent(item.answered_pct)})
+                                <MetricInfoTip helpId="sla_queue_answered" />
+                              </span>
                               {' · '}
-                              {item.unanswered.toLocaleString('cs-CZ')} nezvednutých
+                              <span className="sla-queue-breakdown-hint-part">
+                                {item.unanswered.toLocaleString('cs-CZ')} nezvednutých
+                                <MetricInfoTip helpId="sla_queue_unanswered" />
+                              </span>
                             </span>
                           </article>
                         ))}
                       </div>
                       {metrics.queue_breakdown.totals ? (
                         <p className="sla-queue-breakdown-total">
-                          Celkem hovorů ve frontách:{' '}
+                          Celkem hovorů ve frontách:
+                          <MetricInfoTip helpId="sla_queue_totals" />
+                          {' '}
                           <strong>{metrics.queue_breakdown.totals.total_calls.toLocaleString('cs-CZ')}</strong>
                           {' · '}
                           {metrics.queue_breakdown.totals.answered.toLocaleString('cs-CZ')} zvednutých
@@ -366,6 +395,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                     <div className="sla-queue-breakdown" aria-label="Rozpad podle front Daktela">
                       <p className="sla-queue-breakdown-title">
                         Fronty Daktela
+                        <MetricInfoTip helpId="sla_queue_fronty" />
                         {slaFilterRange
                           ? ` · ${formatFilterRange(slaFilterRange.startDate, slaFilterRange.endDate)}`
                           : ''}
@@ -377,7 +407,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                   <div className="sla-kpi-breakdown" aria-label="Rozpad SLA příchozích linek">
                     {breakdownItems.map((item) => (
                       <article key={item.metric} className="sla-kpi sla-kpi-child">
-                        <span className="sla-kpi-label">{item.label}</span>
+                        <MetricLabel helpId={item.helpId}>{item.label}</MetricLabel>
                         <DrilldownCount
                           count={item.count}
                           className="sla-kpi-value"
