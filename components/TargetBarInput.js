@@ -4,7 +4,8 @@ export default function TargetBarInput({
   fillPct = 0,
   badge = 'Target',
   tone = 'target',
-  inputRef
+  inputRef,
+  readOnly = false
 }) {
   const filled = Boolean(String(value || '').trim())
   return (
@@ -12,7 +13,8 @@ export default function TargetBarInput({
       className={[
         'targets-bar-track',
         `targets-bar-track-${tone}`,
-        filled ? 'is-filled' : ''
+        filled ? 'is-filled' : '',
+        readOnly ? 'is-readonly' : ''
       ]
         .filter(Boolean)
         .join(' ')}
@@ -28,9 +30,11 @@ export default function TargetBarInput({
           type="text"
           inputMode="decimal"
           className="targets-bar-input"
-          placeholder="Zadejte číslo"
+          placeholder={readOnly ? '—' : 'Zadejte číslo'}
           value={value}
-          onChange={onChange}
+          onChange={readOnly ? undefined : onChange}
+          readOnly={readOnly}
+          title={readOnly ? 'Počítáno automaticky z ERP podle data zaměření' : undefined}
         />
       </div>
     </div>

@@ -268,7 +268,7 @@ export default async function handler(req, res) {
       `
       mapRow = mapEmailRow
     } else if (metric === 'activity') {
-      // sjednocený rozpad hovorů + mailů (pro Požadavky / den)
+      // sjednocený rozpad hovorů + mailů (pro Požadavky / den a celkem)
       countSql = `
         SELECT
           (

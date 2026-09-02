@@ -11,8 +11,17 @@ import {
   fetchPocetChybByOperator,
   normalizeOperatorKey
 } from '@/lib/dopadl-hovor-metrics'
+import {
+  fetchAdjustedPocetChybByOperator,
+  inclusiveCalendarDays
+} from '@/lib/operator-error-adjustments'
 import { resolveDateRange } from '@/lib/metrics-query'
 import { ADMIN_PAUSE_NAMES, IDLE_PAUSE_NAMES } from '@/lib/operator-metric-groups'
+import {
+  computeCleanDays,
+  computeRequestsPerDay,
+  computeTotalRequests
+} from '@/lib/operator-requests-metrics'
 import { PAUSE_DISPLAY_NAME_SQL } from '@/lib/pause-labels'
 import fs from 'fs/promises'
 import path from 'path'
@@ -270,7 +279,7 @@ export default async function handler(req, res) {
         COALESCE(p.idle_seconds, 0)::bigint AS idle_seconds,
         GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::bigint AS clean_seconds,
         (GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) AS clean_hours,
-        ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0) AS clean_days,
+        ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0 / 24.0) AS clean_days,
         COALESCE(c.outgoing_calls, 0)::int AS outgoing_calls,
         COALESCE(c.incoming_calls, 0)::int AS incoming_calls,
         COALESCE(c.rejected_calls, 0)::int AS rejected_calls,
@@ -283,9 +292,9 @@ export default async function handler(req, res) {
         COALESCE(e.email_avg_seconds, 0)::float8 AS email_avg_seconds,
         COALESCE(e.email_wait_seconds_sum, 0)::bigint AS email_wait_seconds_sum,
         CASE
-          WHEN ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0) > 0
+          WHEN ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0 / 24.0) > 0
             THEN ((COALESCE(c.outgoing_calls, 0) + COALESCE(c.incoming_calls, 0) + COALESCE(e.email_count, 0))::float8
-              / ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0))
+              / ((GREATEST(COALESCE(l.login_seconds, 0) - COALESCE(p.idle_seconds, 0), 0)::float8 / 3600.0) * 3.0 / 24.0))
           ELSE 0
         END AS requests_per_day,
         -- Excel: (K + O×P + Q×R + T×U) / M × 100
@@ -329,6 +338,8 @@ export default async function handler(req, res) {
     let domluvenoByKey = new Map()
     let erpHovoryByKey = new Map()
     let chybyByKey = new Map()
+    let adjustedChybyByOperatorId = new Map()
+    let chybyPeriodDays = inclusiveCalendarDays(start, end)
     try {
       const dopadlRows = await fetchDopadlHovorByOperator({ start, end })
       dopadlByKey = new Map(dopadlRows.map((row) => [row.operator_key, row]))
@@ -352,6 +363,27 @@ export default async function handler(req, res) {
       chybyByKey = new Map(chybyRows.map((row) => [row.operator_key, row]))
     } catch (error) {
       console.warn('operator-pauses ERP pocet_chyb:', error.message)
+    }
+    try {
+      const erpNameToOperatorId = new Map()
+      for (const row of summaryResult.rows) {
+        erpNameToOperatorId.set(row.operator_name, row.operator_id)
+      }
+      for (const ch of chybyByKey.values()) {
+        const match = summaryResult.rows.find(
+          (row) => normalizeOperatorKey(row.operator_name) === ch.operator_key
+        )
+        if (match) erpNameToOperatorId.set(ch.operator_name, match.operator_id)
+      }
+      const adjusted = await fetchAdjustedPocetChybByOperator({
+        start,
+        end,
+        operatorNamesByKey: erpNameToOperatorId
+      })
+      adjustedChybyByOperatorId = adjusted.byOperator
+      chybyPeriodDays = adjusted.periodDays
+    } catch (error) {
+      console.warn('operator-pauses adjusted pocet_chyb:', error.message)
     }
 
     const byOperator = new Map()
@@ -393,6 +425,17 @@ export default async function handler(req, res) {
         const incomingCalls = Number(row.incoming_calls) || 0
         const totalCalls = Number(row.total_calls) || outgoingCalls + incomingCalls
         const emailCount = Number(row.email_count) || 0
+        const totalRequests = computeTotalRequests({
+          outgoing_calls: outgoingCalls,
+          incoming_calls: incomingCalls,
+          email_count: emailCount
+        })
+        const cleanDays = computeCleanDays(row.clean_hours)
+        const requestsPerDay = computeRequestsPerDay({
+          total_requests: totalRequests,
+          clean_hours: row.clean_hours,
+          clean_days: cleanDays
+        })
         const dopadl = dopadlByKey.get(normalizeOperatorKey(row.operator_name))
         const domluveno = domluvenoByKey.get(normalizeOperatorKey(row.operator_name))
         const erpHovory = erpHovoryByKey.get(normalizeOperatorKey(row.operator_name))
@@ -409,7 +452,14 @@ export default async function handler(req, res) {
           : domluvenoZamereniAno + domluvenoZamereniNe
         const erpHovoryAno = erpHovory ? erpHovory.erp_hovory_ano : 0
         const erpHovoryPocet = erpHovory ? erpHovory.erp_hovory_pocet : 0
-        const pocetChyb = chyby ? chyby.pocet_chyb : 0
+        const pocetChybRaw = chyby ? chyby.pocet_chyb : 0
+        const adjustedChyby = adjustedChybyByOperatorId.get(row.operator_id)
+        const pocetChyb = adjustedChyby ? adjustedChyby.pocet_chyb : pocetChybRaw
+        const pocetChybAvgPerDay = adjustedChyby
+          ? adjustedChyby.pocet_chyb_avg_per_day
+          : pocetChybRaw > 0
+            ? pocetChybRaw / chybyPeriodDays
+            : 0
         const erpOperatorName =
           erpHovory?.operator_name ||
           dopadl?.operator_name ||
@@ -442,7 +492,8 @@ export default async function handler(req, res) {
           email_count: emailCount,
           email_avg_seconds: Number(row.email_avg_seconds) || 0,
           email_wait_seconds_sum: Number(row.email_wait_seconds_sum) || 0,
-          requests_per_day: Number(row.requests_per_day) || 0,
+          total_requests: totalRequests,
+          requests_per_day: requestsPerDay,
           utilization_pct: Number(row.utilization_pct) || 0,
           dopadl_hovor_ano: dopadlHovorAno,
           dopadl_hovor_ne: dopadlHovorNe,
@@ -453,6 +504,10 @@ export default async function handler(req, res) {
           erp_hovory_ano: erpHovoryAno,
           erp_hovory_pocet: erpHovoryPocet,
           pocet_chyb: pocetChyb,
+          pocet_chyb_raw: pocetChybRaw,
+          pocet_chyb_avg_per_day: pocetChybAvgPerDay,
+          pocet_chyb_manual: adjustedChyby?.pocet_chyb_manual || 0,
+          pocet_chyb_excluded: adjustedChyby?.pocet_chyb_excluded || 0,
           // ERP: Dopadl hovor ANO / (ANO+NE)
           success_navolani_pct:
             dopadlHovorPocet > 0 ? (dopadlHovorAno / dopadlHovorPocet) * 100 : null,

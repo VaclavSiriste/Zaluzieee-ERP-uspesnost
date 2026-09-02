@@ -14,6 +14,7 @@ import {
   writeSelectedMonthKey,
   writeTargetsView
 } from '@/lib/targets-storage'
+import { syncTargetsCompletedFromErp } from '@/lib/sync-targets-completed'
 import { sortTechnicians } from '@/lib/technician-targets'
 
 function formatNumber(value) {
@@ -81,40 +82,71 @@ function BreakdownList({ title, rows, values, completed }) {
   )
 }
 
-export default function OperationsTargetsPanel() {
+export default function OperationsTargetsPanel({
+  brandId = 'cz',
+  organizationId = null,
+  brandLabel = 'zaluzieee - CZ'
+}) {
+  const targetsBrandId = brandId
   const [monthKey, setMonthKey] = useState('')
   const [bucket, setBucket] = useState(null)
   const [expanded, setExpanded] = useState(false)
   const [view, setView] = useState('technicians')
+  const [erpSyncing, setErpSyncing] = useState(false)
 
   const monthOptions = useMemo(() => listMonthOptions(), [])
 
-  function reloadBucket(key = monthKey) {
+  async function reloadBucket(key = monthKey, syncErp = false) {
     if (!key) return
-    setBucket(readMonthBucket(key))
+    const initial = readMonthBucket(key, targetsBrandId)
+    if (!syncErp) {
+      setBucket(initial)
+      return
+    }
+    setErpSyncing(true)
+    try {
+      const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
+        organizationId,
+        brandId: targetsBrandId
+      })
+      setBucket(synced)
+    } catch {
+      setBucket(initial)
+    } finally {
+      setErpSyncing(false)
+    }
   }
 
   useEffect(() => {
     const month = readSelectedMonthKey()
     setMonthKey(month)
     setView(readTargetsView())
-    reloadBucket(month)
-  }, [])
+    reloadBucket(month, true)
+  }, [targetsBrandId, organizationId])
 
   useEffect(() => {
     if (!monthKey) return undefined
     function onStorage(event) {
-      if (event.key === 'prvni.targets.monthly.v1' || event.key === 'prvni.targets.selectedMonth') {
+      if (
+        event.key === `prvni.targets.monthly.v1.${targetsBrandId}` ||
+        event.key === 'prvni.targets.selectedMonth'
+      ) {
         reloadBucket(monthKey)
       }
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [monthKey])
+  }, [monthKey, targetsBrandId])
 
   useEffect(() => {
-    if (expanded) reloadBucket(monthKey)
+    if (expanded) reloadBucket(monthKey, true)
   }, [expanded, monthKey])
+
+  function changeMonth(nextMonthKey) {
+    setMonthKey(nextMonthKey)
+    writeSelectedMonthKey(nextMonthKey)
+    reloadBucket(nextMonthKey, true)
+  }
 
   const tech = bucket?.technicians
   const regions = bucket?.regions
@@ -165,13 +197,7 @@ export default function OperationsTargetsPanel() {
       operations: { ...operations, ...patch }
     }
     setBucket(next)
-    writeMonthBucket(monthKey, next)
-  }
-
-  function changeMonth(nextMonthKey) {
-    setMonthKey(nextMonthKey)
-    writeSelectedMonthKey(nextMonthKey)
-    reloadBucket(nextMonthKey)
+    writeMonthBucket(monthKey, next, targetsBrandId)
   }
 
   function changeView(nextView) {
@@ -184,8 +210,11 @@ export default function OperationsTargetsPanel() {
       <h2 className="sla-block-title">Target celkem</h2>
       <p className="sla-block-desc">
         {expanded
-          ? 'Nastavte celkový cíl a splnění, níže rozpad podle krajů a techniků ze stránky Targety.'
+          ? `Nastavte celkový cíl a splnění pro ${brandLabel}. Splněno techniků/krajů se počítá z ERP (datum zaměření${
+              organizationId != null ? `, organizace č. ${organizationId}` : ''
+            }).`
           : 'Klikněte pro rozpad targetů — kraje a technici.'}
+        {erpSyncing ? ' · Načítám splněno z ERP…' : ''}
       </p>
 
       <button
@@ -194,7 +223,9 @@ export default function OperationsTargetsPanel() {
         onClick={() => setExpanded((open) => !open)}
         aria-expanded={expanded}
       >
-        <span className="sla-kpi-label">Target celkem · {formatMonthLabel(monthKey)}</span>
+        <span className="sla-kpi-label">
+          Target celkem · {brandLabel} · {formatMonthLabel(monthKey)}
+        </span>
         <strong className="sla-kpi-value">
           {summaryPct != null ? `${summaryPct} %` : '—'}
         </strong>

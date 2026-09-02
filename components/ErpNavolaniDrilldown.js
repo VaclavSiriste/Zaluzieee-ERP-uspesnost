@@ -32,9 +32,11 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
           period: filters.period,
           offset: String(offset),
           limit: '50',
+          ...(filters.brand ? { brand: filters.brand } : {}),
           ...(filters.startDate ? { startDate: filters.startDate } : {}),
           ...(filters.endDate ? { endDate: filters.endDate } : {}),
-          ...(drilldown.operatorName ? { operatorName: drilldown.operatorName } : {})
+          ...(drilldown.operatorName ? { operatorName: drilldown.operatorName } : {}),
+          ...(drilldown.brand ? { brand: drilldown.brand } : {})
         })
         const response = await fetch(`/api/call-success-navolani-orders?${params}`)
         const payload = await response.json()
@@ -90,7 +92,8 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
           <div>
             <h2 id="erp-navolani-drilldown-title">{title}</h2>
             <p className="drilldown-subtitle">
-              ERP · Naplánován termín zaměření / Dopadl hovor · filtr podle data navolání
+              ERP · organizace {data?.organization_id != null ? `č. ${data.organization_id}` : '—'} ·
+              Naplánován termín zaměření / Dopadl hovor · filtr podle data navolání
             </p>
             {data ? (
               <p className="drilldown-meta">

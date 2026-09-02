@@ -44,6 +44,7 @@ export default function IncomingLineSlaDrilldown({ open, onClose, drilldown, fil
           period: filters.period,
           offset: String(offset),
           limit: '50',
+          ...(filters.brand ? { brand: filters.brand } : {}),
           ...(filters.startDate ? { startDate: filters.startDate } : {}),
           ...(filters.endDate ? { endDate: filters.endDate } : {})
         })
@@ -101,7 +102,7 @@ export default function IncomingLineSlaDrilldown({ open, onClose, drilldown, fil
           <div>
             <h2 id="incoming-line-sla-drilldown-title">{title}</h2>
             <p className="drilldown-subtitle">
-              Daktela · příchozí linky · SLA do 20 s · propojení na zakázku podle telefonu
+              {data?.sla_line_hint || 'Daktela · příchozí linky'} · SLA do 20 s · propojení na zakázku podle telefonu
             </p>
             {data ? (
               <p className="drilldown-meta">
@@ -134,6 +135,7 @@ export default function IncomingLineSlaDrilldown({ open, onClose, drilldown, fil
                       <tr>
                         <th>Čas hovoru</th>
                         <th>Telefon</th>
+                        <th>Linka (DID)</th>
                         <th>Čekání</th>
                         <th>SLA 20 s</th>
                         <th>Operátor</th>
@@ -147,6 +149,7 @@ export default function IncomingLineSlaDrilldown({ open, onClose, drilldown, fil
                         <tr key={item.call_id}>
                           <td>{formatDateTime(item.call_time)}</td>
                           <td>{item.clid || '—'}</td>
+                          <td>{item.did || '—'}</td>
                           <td>{formatSeconds(item.response_seconds)}</td>
                           <td>
                             <strong className={item.within_sla_20s ? 'success' : ''}>

@@ -4,13 +4,15 @@
  */
 
 import { lookupOrdersByPhoneKeys, phoneKeyFromClid } from '@/lib/erp-phone-orders'
-import { resolveDateRange } from '@/lib/metrics-query'
+import { resolveDaktelaDateRange } from '@/lib/metrics-query'
+import { resolveOperationsBrand } from '@/lib/operations-brands'
 import {
   INCOMING_CALLS_FROM,
   INCOMING_CALLS_WHERE,
   INCOMING_LINE_METRIC_LABELS,
   RESPONSE_SECONDS_SQL,
   SLA_THRESHOLD_SECONDS,
+  buildSlaIncomingQueueFilterSql,
   incomingLineMetricFilter,
   queryDaktelaWithRetry
 } from '@/lib/incoming-line-sla'
@@ -29,6 +31,7 @@ function mapItem(row, orderMatch = null) {
     call_id: row.call_id,
     call_time: row.call_time,
     clid: row.clid || null,
+    did: row.did || null,
     answered: row.answered === true,
     response_seconds: responseSeconds,
     wait_time: row.wait_time != null ? Number(row.wait_time) : null,
@@ -55,6 +58,9 @@ export default async function handler(req, res) {
   const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : ''
   const metricRaw = typeof req.query.metric === 'string' ? req.query.metric.trim() : 'all'
   const metric = INCOMING_LINE_METRIC_LABELS[metricRaw] ? metricRaw : 'all'
+  const brandId = typeof req.query.brand === 'string' ? req.query.brand : 'cz'
+  const brand = resolveOperationsBrand(brandId)
+  const queueFilter = buildSlaIncomingQueueFilterSql(brandId)
   const parsedLimit = Math.min(
     Math.max(parseInt(String(req.query.limit || DEFAULT_LIMIT), 10) || DEFAULT_LIMIT, 1),
     MAX_LIMIT
@@ -62,14 +68,19 @@ export default async function handler(req, res) {
   const parsedOffset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0)
 
   try {
-    const { start, end } = resolveDateRange({ startDate, endDate, period })
-    const params = [start, end]
+    const { start, end, startDate: rangeStart, endDate: rangeEnd } = resolveDaktelaDateRange({
+      startDate,
+      endDate,
+      period
+    })
+    const params = [rangeStart, rangeEnd]
     const metricFilter = incomingLineMetricFilter(metric)
 
     const countSql = `
       SELECT COUNT(*)::int AS total
       ${INCOMING_CALLS_FROM}
       WHERE ${INCOMING_CALLS_WHERE}
+        ${queueFilter}
         ${metricFilter}
     `
     const countResult = await queryDaktelaWithRetry(countSql, params)
@@ -80,6 +91,7 @@ export default async function handler(req, res) {
         c.call AS call_id,
         c.call_time,
         c.clid,
+        c.did,
         c.answered,
         c.wait_time,
         c.ringing_time,
@@ -91,6 +103,7 @@ export default async function handler(req, res) {
         COALESCE(NULLIF(TRIM(q.title), ''), NULLIF(TRIM(q.name), ''), c.queue, '—') AS queue_name
       ${INCOMING_CALLS_FROM}
       WHERE ${INCOMING_CALLS_WHERE}
+        ${queueFilter}
         ${metricFilter}
       ORDER BY c.call_time DESC NULLS LAST
       LIMIT $3 OFFSET $4
@@ -105,10 +118,14 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       period,
+      brand: brand.id,
+      sla_line_hint: brand.slaLineHint,
       metric,
       label: INCOMING_LINE_METRIC_LABELS[metric],
       start: start.toISOString(),
       end: end.toISOString(),
+      startDate: rangeStart,
+      endDate: rangeEnd,
       sla_threshold_seconds: SLA_THRESHOLD_SECONDS,
       total,
       limit: parsedLimit,

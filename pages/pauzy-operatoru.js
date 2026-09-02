@@ -3,6 +3,7 @@ import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
 import DrilldownCount from '@/components/DrilldownCount'
 import PauseDrilldown from '@/components/PauseDrilldown'
+import OperatorErrorsDrilldown from '@/components/OperatorErrorsDrilldown'
 import OperatorDirectory from '@/components/OperatorDirectory'
 import { getMonthToDateRange } from '@/lib/metrics-query'
 import {
@@ -14,6 +15,12 @@ import {
   writeActiveTeamFilter,
   writeTeamAssignments
 } from '@/lib/operator-teams'
+import {
+  computeCleanDays,
+  computeRequestsPerDay,
+  computeTotalRequests,
+  formatRequestsFormulaHint
+} from '@/lib/operator-requests-metrics'
 
 const HIDDEN_OPERATORS_KEY = 'prvni.pauses.hiddenOperators'
 
@@ -536,6 +543,29 @@ export default function OperatorPausesPage() {
     })
   }
 
+  function enrichSummary(row) {
+    if (!row) return row
+    const totalRequests =
+      Number(row.total_requests) ||
+      computeTotalRequests({
+        outgoing_calls: row.outgoing_calls,
+        incoming_calls: row.incoming_calls,
+        email_count: row.email_count
+      })
+    const cleanDays = computeCleanDays(row.clean_hours)
+    const requestsPerDay = computeRequestsPerDay({
+      total_requests: totalRequests,
+      clean_hours: row.clean_hours,
+      clean_days: cleanDays
+    })
+    return {
+      ...row,
+      total_requests: totalRequests,
+      clean_days: cleanDays,
+      requests_per_day: requestsPerDay
+    }
+  }
+
   return (
     <main className="dashboard-container pauses-page">
       <div className="dashboard-layout">
@@ -831,7 +861,7 @@ export default function OperatorPausesPage() {
           <div className="pauses-grid">
             {visibleBubbles.map((bubble, index) => {
               const tone = toneForName(bubble.operator_name)
-              const summary = summaryByOperator.get(String(bubble.operator_id))
+              const summary = enrichSummary(summaryByOperator.get(String(bubble.operator_id)))
               return (
                 <article
                   className={`pauses-card pauses-card-tone-${tone}`}
@@ -846,7 +876,7 @@ export default function OperatorPausesPage() {
                       <h3>{bubble.operator_name}</h3>
                       <p>
                         {summary
-                          ? `${formatNumber(summary.requests_per_day, 2)} pož./den · vytíženost ${formatPercent(summary.utilization_pct)}`
+                          ? `${formatNumber(summary.requests_per_day, 2)} pož./den · ${formatNumber(summary.total_requests, 0)} celkem · vytíženost ${formatPercent(summary.utilization_pct)}`
                           : `${bubble.pauses.length} typů pauz`}
                       </p>
                     </div>
@@ -947,18 +977,37 @@ export default function OperatorPausesPage() {
                       <button
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.total_calls && !summary.email_count}
+                        disabled={!summary.total_requests && !summary.clean_hours}
                         onClick={() =>
                           openMetricDrilldown(
                             bubble,
                             'activity',
                             'Požadavky / den',
-                            'Rozpad hovorů a mailů, ze kterých se počítá metrika'
+                            `Vzorec: celkem požadavků ÷ čistý čas ve dnech · dny = (h × 3) ÷ 24 · h = přihlášení − nečinnost · období ${startDate} – ${endDate}`
                           )
                         }
                       >
                         <span>Požadavky / den</span>
                         <strong>{formatNumber(summary.requests_per_day, 2)}</strong>
+                        <small title="Požadavky/den = celkem ÷ čistý čas ve dnech, kde dny = (h × 3) ÷ 24">
+                          {formatRequestsFormulaHint(summary)}
+                        </small>
+                      </button>
+                      <button
+                        type="button"
+                        className="pauses-summary-item pauses-summary-clickable"
+                        disabled={!summary.total_requests}
+                        onClick={() =>
+                          openMetricDrilldown(
+                            bubble,
+                            'activity',
+                            'Požadavky celkem',
+                            `Hovory + maily ve zvoleném období (${startDate} – ${endDate})`
+                          )
+                        }
+                      >
+                        <span>Požadavky celkem</span>
+                        <strong>{formatNumber(summary.total_requests, 0)}</strong>
                         <small>rozkliknout požadavky</small>
                       </button>
                       <button
@@ -1040,13 +1089,12 @@ export default function OperatorPausesPage() {
                       <button
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.pocet_chyb}
                         onClick={() =>
                           openMetricDrilldown(
                             bubble,
                             'pocet_chyb',
                             'Počet chyb',
-                            'Looker: 5 typů chyb · období podle data vytvoření zakázky',
+                            'ERP chyby + ruční úpravy · průměr na den · ukládá se do databáze',
                             {
                               operatorName:
                                 summary.chyby_operator_name ||
@@ -1058,7 +1106,9 @@ export default function OperatorPausesPage() {
                       >
                         <span>Počet chyb</span>
                         <strong>{formatNumber(summary.pocet_chyb, 0)}</strong>
-                        <small>rozkliknout chyby</small>
+                        <small>
+                          průměr {formatNumber(summary.pocet_chyb_avg_per_day, 2)} / den · rozkliknout
+                        </small>
                       </button>
                     </div>
                   ) : null}
@@ -1070,10 +1120,18 @@ export default function OperatorPausesPage() {
       </div>
 
       <PauseDrilldown
-        open={Boolean(drilldown)}
-        drilldown={drilldown}
+        open={Boolean(drilldown && drilldown.metric !== 'pocet_chyb')}
+        drilldown={drilldown?.metric === 'pocet_chyb' ? null : drilldown}
         filters={filters}
         onClose={() => setDrilldown(null)}
+      />
+
+      <OperatorErrorsDrilldown
+        open={Boolean(drilldown && drilldown.metric === 'pocet_chyb')}
+        drilldown={drilldown?.metric === 'pocet_chyb' ? drilldown : null}
+        filters={filters}
+        onClose={() => setDrilldown(null)}
+        onChanged={() => fetchData()}
       />
 
       <OperatorDirectory

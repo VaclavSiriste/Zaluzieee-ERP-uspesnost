@@ -38,7 +38,14 @@ function buildBreakdownItems(metrics) {
   ]
 }
 
-export default function CallSuccessNavolaniPanel({ metrics, expanded, onToggle, onOpenMetric }) {
+export default function CallSuccessNavolaniPanel({
+  metrics,
+  expanded,
+  onToggle,
+  onOpenMetric,
+  navolaniHint = 'ERP · termín zaměření ANO / dopadl hovor ANO',
+  organizationId = null
+}) {
   if (!metrics) return null
 
   const breakdownItems = buildBreakdownItems(metrics)
@@ -49,8 +56,10 @@ export default function CallSuccessNavolaniPanel({ metrics, expanded, onToggle, 
       <h2 className="sla-block-title">Úspěšnost navolání</h2>
       <p className="sla-block-desc">
         {expanded
-          ? 'ERP · Naplánován termín zaměření ANO ku Dopadl hovor ANO. Klikněte pro seznam zakázek.'
-          : 'Klikněte pro rozpad — data z ERP, ne z Daktely.'}
+          ? `${navolaniHint}. Klikněte pro seznam zakázek.`
+          : organizationId != null
+            ? `Organizace č. ${organizationId} · klikněte pro rozpad — data z ERP, ne z Daktely.`
+            : 'Klikněte pro rozpad — data z ERP, ne z Daktely.'}
       </p>
 
       <button

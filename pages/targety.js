@@ -4,7 +4,7 @@ import CzechRegionsMap from '@/components/CzechRegionsMap'
 import RegionDirectory from '@/components/RegionDirectory'
 import TargetBarInput from '@/components/TargetBarInput'
 import TechnicianDirectory from '@/components/TechnicianDirectory'
-import { normalizeRegionName, regionId, sortRegions } from '@/lib/czech-regions'
+import { normalizeRegionName, resolveErpRegionId, sortRegions, buildDefaultRegionCatalog } from '@/lib/czech-regions'
 import {
   formatMonthLabel,
   listMonthOptions,
@@ -17,6 +17,7 @@ import {
   writeSelectedMonthKey,
   writeTargetsView
 } from '@/lib/targets-storage'
+import { syncTargetsCompletedFromErp } from '@/lib/sync-targets-completed'
 import {
   normalizeTechnicianName,
   sortTechnicians,
@@ -81,6 +82,13 @@ function computeProgressPct(targetRaw, completedRaw) {
   return String(completedRaw || '').trim() ? 8 : 0
 }
 
+function formatOverallPercent(totalTarget, totalCompleted) {
+  if (totalTarget != null && totalTarget > 0 && totalCompleted != null) {
+    return `${Math.min(100, Math.round((totalCompleted / totalTarget) * 100))} %`
+  }
+  return '—'
+}
+
 function remapValues(valuesMap, idMap) {
   const next = {}
   for (const [oldId, value] of Object.entries(valuesMap)) {
@@ -98,12 +106,29 @@ export default function TargetyPage() {
   const [query, setQuery] = useState('')
   const [focusRegionId, setFocusRegionId] = useState('')
   const [selectedRegionId, setSelectedRegionId] = useState('')
+  const [erpSyncing, setErpSyncing] = useState(false)
+  const [erpSyncError, setErpSyncError] = useState('')
+
+  async function loadMonthWithErp(nextMonthKey) {
+    const initial = readMonthBucket(nextMonthKey)
+    setBucket(initial)
+    setErpSyncing(true)
+    setErpSyncError('')
+    try {
+      const { bucket: synced } = await syncTargetsCompletedFromErp(nextMonthKey, initial)
+      setBucket(synced)
+    } catch (err) {
+      setErpSyncError(err.message || 'Nepodařilo se načíst splněno z ERP')
+    } finally {
+      setErpSyncing(false)
+    }
+  }
 
   useEffect(() => {
     const month = readSelectedMonthKey()
     setMonthKey(month)
     setView(readTargetsView())
-    setBucket(readMonthBucket(month))
+    loadMonthWithErp(month)
   }, [])
 
   useEffect(() => {
@@ -131,9 +156,9 @@ export default function TargetyPage() {
   function changeMonth(nextMonthKey) {
     setMonthKey(nextMonthKey)
     writeSelectedMonthKey(nextMonthKey)
-    setBucket(readMonthBucket(nextMonthKey))
     setQuery('')
     setSelectedRegionId('')
+    loadMonthWithErp(nextMonthKey)
   }
 
   function changeView(nextView) {
@@ -214,16 +239,8 @@ export default function TargetyPage() {
     updateTechnicians({ values: { ...tech.values, [id]: rawValue } })
   }
 
-  function handleTechCompletedChange(id, rawValue) {
-    updateTechnicians({ completed: { ...tech.completed, [id]: rawValue } })
-  }
-
   function handleRegionValueChange(id, rawValue) {
     updateRegions({ values: { ...regions.values, [id]: rawValue } })
-  }
-
-  function handleRegionCompletedChange(id, rawValue) {
-    updateRegions({ completed: { ...regions.completed, [id]: rawValue } })
   }
 
   function handleRegionLabelChange(id, rawLabel) {
@@ -265,20 +282,21 @@ export default function TargetyPage() {
   function handleRegionAddName(name) {
     const normalized = normalizeRegionName(name)
     if (!normalized) return
-    const id = regionId(normalized)
-    if (regions.catalog.some((item) => item.id === id)) {
-      setMessage('Kraj už je v číselníku.')
+    const catalog = buildDefaultRegionCatalog()
+    const id = resolveErpRegionId(normalized, catalog)
+    if (!id) {
+      setMessage('Neznámý kraj — zadejte název z číselníku (14 krajů + Benešov).')
       return
     }
-    const nextCatalog = sortRegions([
-      ...regions.catalog,
-      { id, name: normalized, shortName: normalized }
-    ])
+    if (regionActiveSet.has(id)) {
+      setMessage('Kraj už je aktivní v tabulce.')
+      return
+    }
     updateRegions({
-      catalog: nextCatalog,
-      activeIds: regionActiveSet.has(id) ? regions.activeIds : [...regions.activeIds, id]
+      catalog,
+      activeIds: [...regions.activeIds, id]
     })
-    setMessage(`Přidán kraj ${normalized}.`)
+    setMessage(`Přidán ${catalog.find((item) => item.id === id)?.name || normalized}.`)
   }
 
   function handleTechRename(oldId, name) {
@@ -301,28 +319,7 @@ export default function TargetyPage() {
   }
 
   function handleRegionRename(oldId, name) {
-    const normalized = normalizeRegionName(name)
-    if (!normalized) return
-    const newId = regionId(normalized)
-    if (oldId !== newId && regions.catalog.some((item) => item.id === newId)) {
-      setMessage('Kraj s tímto názvem už v číselníku je.')
-      return
-    }
-    const idMap = { [oldId]: newId }
-    updateRegions({
-      catalog: sortRegions(
-        regions.catalog.map((item) =>
-          item.id === oldId
-            ? { id: newId, name: normalized, shortName: normalized }
-            : item
-        )
-      ),
-      activeIds: regions.activeIds.map((id) => (id === oldId ? newId : id)),
-      values: remapValues(regions.values, idMap),
-      completed: remapValues(regions.completed, idMap),
-      labels: remapValues(regions.labels, idMap)
-    })
-    setMessage(`Kraj přejmenován na ${normalized}.`)
+    setMessage('Přejmenování krajů není podporováno — použijte číselník 14 krajů + Benešov.')
   }
 
   function handleTechRemove(id) {
@@ -373,8 +370,8 @@ export default function TargetyPage() {
               <p className="targets-kicker">Operátoři · plánování</p>
               <h1>Targety</h1>
               <p>
-                Cílové hodnoty podle techniků nebo krajů. Data se ukládají lokálně a každý měsíc má
-                vlastní číselník i hodnoty.
+                Cílové hodnoty podle techniků nebo krajů. Splněno z ERP: technik = zaměřovač,
+                kraj = region z adresy zákazníka, obojí podle data zaměření v měsíci.
               </p>
               <div className="targets-hero-actions">
                 <button
@@ -443,11 +440,44 @@ export default function TargetyPage() {
             </div>
           </section>
 
+          {erpSyncing ? (
+            <div className="targets-toast" role="status">
+              Načítám splněno z ERP…
+            </div>
+          ) : null}
+
+          {erpSyncError ? (
+            <div className="targets-toast targets-toast-error" role="alert">
+              {erpSyncError}
+            </div>
+          ) : null}
+
           {message ? (
             <div className="targets-toast" role="status">
               {message}
             </div>
           ) : null}
+
+          <section className="targets-overall-completion targets-overall-completion-page" aria-label="Celkově splněno">
+            <div className="targets-overall-copy">
+              <span className="targets-overall-label">
+                Celkově splněno · {view === 'regions' ? 'kraje' : 'technici'} · {monthLabel}
+              </span>
+              <strong className="targets-overall-pct">
+                {formatOverallPercent(stats.totalValue, stats.totalCompleted)}
+              </strong>
+              <span className="targets-overall-hint">
+                splněno{' '}
+                {stats.totalCompleted != null
+                  ? stats.totalCompleted.toLocaleString('cs-CZ', { maximumFractionDigits: 0 })
+                  : '—'}{' '}
+                / cíl{' '}
+                {stats.totalValue != null
+                  ? stats.totalValue.toLocaleString('cs-CZ', { maximumFractionDigits: 0 })
+                  : '—'}
+              </span>
+            </div>
+          </section>
 
           <section className="targets-kpis" aria-label="Souhrn targetů">
             <article className="targets-kpi">
@@ -493,13 +523,15 @@ export default function TargetyPage() {
               labels={regions.labels}
               activeIds={regions.activeIds}
               selectedId={selectedRegionId}
+              overallTarget={regionStats.totalValue}
+              overallCompleted={regionStats.totalCompleted}
               onSelect={(id) => {
                 setSelectedRegionId(id)
                 if (id) setFocusRegionId(id)
               }}
               onValueChange={handleRegionValueChange}
-              onCompletedChange={handleRegionCompletedChange}
               onLabelChange={handleRegionLabelChange}
+              completedReadOnly
             />
           ) : null}
 
@@ -591,7 +623,7 @@ export default function TargetyPage() {
                           fillPct={completedPct}
                           badge="Splněno"
                           tone="completed"
-                          onChange={(event) => handleTechCompletedChange(row.id, event.target.value)}
+                          readOnly
                         />
                       </label>
                     </article>
@@ -630,6 +662,9 @@ export default function TargetyPage() {
                       <div className="targets-region-card">
                         <div className="targets-region-card-head">
                           <strong className="targets-region-title">{row.name}</strong>
+                          <span className="targets-region-pct">
+                            {formatOverallPercent(parseTargetNumber(value), parseTargetNumber(completed))}
+                          </span>
                           <button
                             type="button"
                             className="targets-region-select-btn"
@@ -658,9 +693,7 @@ export default function TargetyPage() {
                               fillPct={completedPct}
                               badge="Splněno"
                               tone="completed"
-                              onChange={(event) =>
-                                handleRegionCompletedChange(row.id, event.target.value)
-                              }
+                              readOnly
                             />
                           </label>
                         </div>

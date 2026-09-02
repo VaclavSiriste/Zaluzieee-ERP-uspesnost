@@ -40,8 +40,20 @@ export default function AppMenu({ active = 'dashboard' }) {
       <div className="menu-block">
         <div className="menu-block-title">Provoz</div>
         <ul>
-          <li className={active === 'operations' ? 'active' : ''}>
+          <li className={active === 'operations-cz' ? 'active' : ''}>
             <Link href="/rizeni-provozu">zaluzieee - CZ</Link>
+          </li>
+          <li className={active === 'operations-sk' ? 'active' : ''}>
+            <Link href="/rizeni-provozu-sk">zaluzieee - SK</Link>
+          </li>
+          <li className={active === 'operations-malujemeee' ? 'active' : ''}>
+            <Link href="/rizeni-provozu-malujemeee">malujemeee</Link>
+          </li>
+          <li className={active === 'operations-pokladamee' ? 'active' : ''}>
+            <Link href="/rizeni-provozu-pokladamee">pokladamee</Link>
+          </li>
+          <li className={active === 'operations-venkovky' ? 'active' : ''}>
+            <Link href="/rizeni-provozu-venkovky">Venkovky</Link>
           </li>
         </ul>
       </div>
