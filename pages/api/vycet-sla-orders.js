@@ -1,14 +1,19 @@
 /**
  * Drilldown Výčet SLA — seznam leadů
  * metric:
- *   leads|navolano|missing  → business datum
- *   poptavky|sla24|sla48|sla72 → kalendářní datum (+2h)
- * Volitelný filtr značky: ?brand=… → orders.organization_id
+ *   leads|navolano|missing  → business / dnešek (sheet) nebo business datum (ERP)
+ *   poptavky|sla24|sla48|sla72 → kalendářní filtr dle data přijetí / created_at
  */
 
 import { getPool } from '@/lib/db-esm'
-import { SYSTEEEM_ORDER_URL } from '@/lib/metrics-query'
+import { SYSTEEEM_ORDER_URL, formatDateOnly } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
+import {
+  fetchOvtSheetRows,
+  isOvtSheetConfigured,
+  listOvtSheetVycetSlaOrders,
+  resolveOvtSheetBrand
+} from '@/lib/ovt-sheet'
 import {
   BUSINESS_DATE_SQL,
   CALENDAR_DATE_SQL,
@@ -42,14 +47,71 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const metric = resolveMetric(req.query.metric)
+  const period = typeof req.query.period === 'string' ? req.query.period : 'month'
+  const brandId = typeof req.query.brand === 'string' ? req.query.brand : ''
+  const parsedLimit = Math.min(
+    Math.max(parseInt(String(req.query.limit || DEFAULT_LIMIT), 10) || DEFAULT_LIMIT, 1),
+    MAX_LIMIT
+  )
+  const parsedOffset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0)
+
+  const ovtCfg = resolveOvtSheetBrand(brandId)
+  if (ovtCfg) {
+    if (!isOvtSheetConfigured(brandId)) {
+      return res.status(503).json({
+        error: `${brandId} Výčet SLA čte Google Sheet. Nastavte ${ovtCfg.envWebappUrl}.`
+      })
+    }
+    try {
+      const { start, end } = resolveSlaRange(req.query)
+      const rangeStart = formatDateOnly(start)
+      const rangeEnd = formatDateOnly(end)
+      const { cfg, rows } = await fetchOvtSheetRows(brandId)
+      const listed = listOvtSheetVycetSlaOrders(cfg, rows, {
+        metric,
+        startDate: rangeStart,
+        endDate: rangeEnd,
+        limit: parsedLimit,
+        offset: parsedOffset
+      })
+
+      const labels = {
+        leads: 'Přišlo leadů',
+        navolano: 'Dnes navoláno',
+        missing: 'Dnes chybí',
+        poptavky: 'Poptávky',
+        sla24: 'SLA 24',
+        sla48: 'SLA 48',
+        sla72: 'SLA 72'
+      }
+
+      return res.status(200).json({
+        metric: listed.metric,
+        label: labels[listed.metric] || labels.leads,
+        mode: listed.mode,
+        period,
+        brand: brandId || null,
+        organization_id: resolveOrganizationId({ brandId }),
+        start: start.toISOString(),
+        end: end.toISOString(),
+        source: ovtCfg.source,
+        total: listed.total,
+        limit: parsedLimit,
+        offset: parsedOffset,
+        orders: listed.orders
+      })
+    } catch (error) {
+      console.error(`vycet-sla-orders (${brandId} sheet):`, error.message)
+      return res.status(500).json({ error: error.message || 'Chyba načtení SLA ze sheetu' })
+    }
+  }
+
   const pool = getPool()
   if (!pool) {
     return res.status(500).json({ error: 'ERP databáze není dostupná' })
   }
 
-  const metric = resolveMetric(req.query.metric)
-  const period = typeof req.query.period === 'string' ? req.query.period : 'month'
-  const brandId = typeof req.query.brand === 'string' ? req.query.brand : ''
   const organizationId = resolveOrganizationId({
     brandId,
     organizationId: req.query.organizationId
@@ -67,11 +129,6 @@ export default async function handler(req, res) {
 
   const useCalendar = CALENDAR_METRICS.has(metric)
   const dateSql = useCalendar ? CALENDAR_DATE_SQL : BUSINESS_DATE_SQL
-  const parsedLimit = Math.min(
-    Math.max(parseInt(String(req.query.limit || DEFAULT_LIMIT), 10) || DEFAULT_LIMIT, 1),
-    MAX_LIMIT
-  )
-  const parsedOffset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0)
 
   try {
     const { start, end } = resolveSlaRange(req.query)
@@ -164,6 +221,7 @@ export default async function handler(req, res) {
       organization_id: organizationId,
       start: start.toISOString(),
       end: end.toISOString(),
+      source: 'erp-db',
       total: countResult.rows[0]?.total || 0,
       limit: parsedLimit,
       offset: parsedOffset,

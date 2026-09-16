@@ -116,9 +116,13 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
           <div>
             <h2 id="sla-drilldown-title">{title}</h2>
             <p className="drilldown-subtitle">
-              {isCalendar
-                ? 'Kalendářní datum 00:00–23:59 · +2 h posun'
-                : 'Business datum 20:00–19:59 · +2 h posun'}
+              {data?.source && String(data.source).includes('sheet')
+                ? isCalendar
+                  ? 'OVT sheet · poptávky dle data přijetí leadu (B) · kontakt = datum navolání (K)'
+                  : 'OVT sheet · dnešek (Praha) · B = přijetí · K = datum navolání'
+                : isCalendar
+                  ? 'Kalendářní datum 00:00–23:59 · +2 h posun'
+                  : 'Business datum 20:00–19:59 · +2 h posun'}
               {data?.organization_id != null
                 ? ` · organization_id č. ${data.organization_id}`
                 : filters?.organizationId != null
@@ -205,14 +209,18 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
                           )}
                           <td>{order.status || '—'}</td>
                           <td>
-                            <a
-                              href={order.detail_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="drilldown-detail-link"
-                            >
-                              Systeeem →
-                            </a>
+                            {order.detail_url ? (
+                              <a
+                                href={order.detail_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="drilldown-detail-link"
+                              >
+                                Systeeem →
+                              </a>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -11,7 +11,8 @@
  * 4) URL nasazení dej do Prvni/.env jako POKLADAMEE_OVT_SHEET_WEBAPP_URL
  *    a stejný token jako POKLADAMEE_OVT_SHEET_TOKEN
  *
- * Sloupce: K = datum navolání, L = dopadl hovor, N = důvod (vyřazení z úspěšnosti),
+ * Sloupce: K = datum navolání, L = dopadl hovor,
+ *          M = Důvod ne Hovoru (vyřazení z úspěšnosti),
  *          P = datum zaměření, Q = OVT technik, U = kraj
  * Řádek 2 = nadpis, data od řádku 3.
  */
@@ -22,7 +23,7 @@ var SHEET_GID = 1262379590;
 var DATA_START_ROW = 3;
 var COL_DATUM = 11; // K
 var COL_DOPADL = 12; // L
-var COL_DUVOD = 14; // N
+var COL_DUVOD = 13; // M — Důvod ne Hovoru
 var COL_DATUM_ZAMERENI = 16; // P
 var COL_TECHNIK = 17; // Q
 var COL_KRAJ = 21; // U

@@ -130,7 +130,8 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const brand = OPERATIONS_BRANDS[brandId] || OPERATIONS_BRANDS.cz
   const showTargets = brand.showTargets === true
   const navolaniConfigured = brand.organizationId != null || brand.navolaniSource === 'ovt-sheet'
-  const vycetSlaConfigured = brand.organizationId != null
+  const vycetSlaConfigured =
+    brand.organizationId != null || brand.navolaniSource === 'ovt-sheet' || brand.vycetSlaSource === 'ovt-sheet'
 
   const [period, setPeriod] = useState('month')
   const [startDate, setStartDate] = useState('')
@@ -139,6 +140,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [slaFilterRange, setSlaFilterRange] = useState(null)
   const [navolaniMetrics, setNavolaniMetrics] = useState(null)
   const [navolaniSource, setNavolaniSource] = useState('erp-db')
+  const [vycetSlaSource, setVycetSlaSource] = useState('erp-db')
   const [sheetTechnicians, setSheetTechnicians] = useState([])
   const [loading, setLoading] = useState(true)
   const [navolaniLoading, setNavolaniLoading] = useState(true)
@@ -337,6 +339,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
       const data = await response.json()
       if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
       setVycetSlaMetrics(data.metrics || null)
+      setVycetSlaSource(data.source || (brand.navolaniSource === 'ovt-sheet' ? 'ovt-sheet' : 'erp-db'))
     } catch (err) {
       if (err.name === 'AbortError') {
         setVycetSlaError('Načítání Výčtu SLA trvalo příliš dlouho.')
@@ -344,6 +347,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
         setVycetSlaError(err.message || 'Nepodařilo se načíst Výčet SLA')
       }
       setVycetSlaMetrics(null)
+      setVycetSlaSource('erp-db')
     } finally {
       setVycetSlaLoading(false)
     }
@@ -390,8 +394,14 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               <p className="sla-kicker">Provoz · Daktela + ERP reporting</p>
               <h1>{brand.pageTitle}</h1>
               <p className="sla-hero-lead">
-                SLA příchozích linek ({brand.slaLineHint}), Výčet SLA z ERP
-                {vycetSlaConfigured ? ` (organization_id č. ${brand.organizationId})` : ''},
+                SLA příchozích linek ({brand.slaLineHint}),
+                {brand.navolaniSource === 'ovt-sheet' || brand.vycetSlaSource === 'ovt-sheet'
+                  ? ' Výčet SLA z OVT sheetu (B přijetí / K navolání)'
+                  : ` Výčet SLA z ERP${
+                      vycetSlaConfigured && brand.organizationId != null
+                        ? ` (organization_id č. ${brand.organizationId})`
+                        : ''
+                    }`},
                 průměrná doba do navolání zmeškaných,
                 {brand.navolaniSource === 'ovt-sheet'
                   ? ' úspěšnost navolání z OVT sheetu'
@@ -690,6 +700,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               onOpenMetric={openVycetSlaMetric}
               organizationId={brand.organizationId}
               brandLabel={brand.pageTitle}
+              source={vycetSlaSource}
             />
           ) : null}
 

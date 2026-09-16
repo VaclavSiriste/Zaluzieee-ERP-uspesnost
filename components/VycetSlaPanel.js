@@ -14,12 +14,15 @@ export default function VycetSlaPanel({
   onToggle,
   onOpenMetric,
   organizationId = null,
-  brandLabel = ''
+  brandLabel = '',
+  source = 'erp-db'
 }) {
   if (!metrics) return null
 
-  const orgHint =
-    organizationId != null
+  const isSheet = String(source || '').includes('ovt-sheet') || String(source || '').includes('sheet')
+  const orgHint = isSheet
+    ? `OVT sheet${brandLabel ? ` · ${brandLabel}` : ''} · A=ID · B=přijetí leadu · K=datum navolání`
+    : organizationId != null
       ? `ERP · organization_id (company ID) č. ${organizationId}${brandLabel ? ` · ${brandLabel}` : ''}`
       : 'ERP · všechny organizace (bez filtru company ID)'
 
@@ -31,8 +34,12 @@ export default function VycetSlaPanel({
       </h2>
       <p className="sla-block-desc">
         {expanded
-          ? `${orgHint}. Business den 20:00–19:59 · kalendářní SLA 24 / 48 / 72 h. Klikněte na číslo pro seznam leadů.`
-          : `${orgHint}. Přišlo / navoláno a SLA 24·48·72 dle filtru období.`}
+          ? isSheet
+            ? `${orgHint}. Dnes = kalendářní den (Praha). Poptávky / SLA 24·48·72 dle filtru na datum přijetí (B).`
+            : `${orgHint}. Business den 20:00–19:59 · kalendářní SLA 24 / 48 / 72 h. Klikněte na číslo pro seznam leadů.`
+          : isSheet
+            ? `${orgHint}. Přišlo dnes / navoláno a SLA 24·48·72 dle filtru období.`
+            : `${orgHint}. Přišlo / navoláno a SLA 24·48·72 dle filtru období.`}
       </p>
 
       <button
@@ -64,7 +71,7 @@ export default function VycetSlaPanel({
                 className="sla-kpi-value"
                 onOpen={() => onOpenMetric('leads', 'Přišlo leadů')}
               />
-              <span className="sla-kpi-hint">business den</span>
+              <span className="sla-kpi-hint">{isSheet ? 'dnešek · B' : 'business den'}</span>
             </article>
             <article className="sla-kpi sla-kpi-child">
               <MetricLabel helpId="vycet_sla_navolano">Dnes navoláno</MetricLabel>
@@ -73,7 +80,7 @@ export default function VycetSlaPanel({
                 className="sla-kpi-value"
                 onOpen={() => onOpenMetric('navolano', 'Dnes navoláno')}
               />
-              <span className="sla-kpi-hint">stejný business den</span>
+              <span className="sla-kpi-hint">{isSheet ? 'B dnes + K vyplněno' : 'stejný business den'}</span>
             </article>
             <article className="sla-kpi sla-kpi-child">
               <MetricLabel helpId="vycet_sla_missing">Dnes chybí</MetricLabel>
@@ -82,7 +89,7 @@ export default function VycetSlaPanel({
                 className="sla-kpi-value"
                 onOpen={() => onOpenMetric('missing', 'Dnes chybí')}
               />
-              <span className="sla-kpi-hint">přišlo − navoláno</span>
+              <span className="sla-kpi-hint">{isSheet ? 'B dnes · K prázdné' : 'přišlo − navoláno'}</span>
             </article>
             <article className="sla-kpi sla-kpi-child sla-kpi-accent">
               <MetricLabel helpId="vycet_sla_celkem">Splněno</MetricLabel>
@@ -108,7 +115,7 @@ export default function VycetSlaPanel({
                 className="sla-kpi-value"
                 onOpen={() => onOpenMetric('poptavky', 'Poptávky')}
               />
-              <span className="sla-kpi-hint">kalendářní den · +2 h</span>
+              <span className="sla-kpi-hint">{isSheet ? 'filtr · datum přijetí (B)' : 'kalendářní den · +2 h'}</span>
             </article>
             <article className="sla-kpi sla-kpi-child">
               <MetricLabel helpId="vycet_sla_24">SLA 24</MetricLabel>
