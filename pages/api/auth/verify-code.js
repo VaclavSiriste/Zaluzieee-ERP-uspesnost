@@ -1,6 +1,6 @@
 import { buildAuthCookie, createAuthToken, isAllowedEmail, getAllowedDomain } from '@/lib/auth'
 import { verifyCodeChallenge } from '@/lib/auth-challenge'
-import { getHomePathForEmail } from '@/lib/access-control'
+import { getHomePathForEmail } from '@/lib/access-control-server'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

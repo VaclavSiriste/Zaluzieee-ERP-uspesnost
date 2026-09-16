@@ -6,7 +6,7 @@
  */
 
 import { verifyAuthToken, AUTH_COOKIE_NAME } from '@/lib/auth'
-import { getAccessProfile } from '@/lib/access-control'
+import { getAccessProfile } from '@/lib/access-control-server'
 import {
   addOperatorsOnlyEmail,
   listOperatorsOnlyEmails,

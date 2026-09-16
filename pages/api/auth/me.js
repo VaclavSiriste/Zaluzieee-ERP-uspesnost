@@ -3,7 +3,7 @@
  */
 
 import { verifyAuthToken, AUTH_COOKIE_NAME } from '@/lib/auth'
-import { getAccessProfile } from '@/lib/access-control'
+import { getAccessProfile } from '@/lib/access-control-server'
 
 function readCookie(req, name) {
   const raw = req.headers.cookie || ''

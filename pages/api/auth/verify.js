@@ -1,6 +1,6 @@
 import { buildAuthCookie, createAuthToken, isAllowedEmail } from '@/lib/auth'
 import { verifyMagicLoginToken } from '@/lib/auth-challenge'
-import { canAccessPath, getHomePathForEmail } from '@/lib/access-control'
+import { canAccessPath, getHomePathForEmail } from '@/lib/access-control-server'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
