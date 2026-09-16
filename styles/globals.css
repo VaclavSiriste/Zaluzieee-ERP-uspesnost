@@ -3094,6 +3094,10 @@ h6 {
   gap: 12px;
 }
 
+.ops-targets-brand-switch {
+  margin: 0 0 12px;
+}
+
 .ops-targets-toolbar .targets-view-switch,
 .ops-targets-toolbar .targets-month-switch {
   flex: 0 1 auto;

@@ -46,6 +46,31 @@ function computeProgressPct(targetRaw, completedRaw) {
   return null
 }
 
+function summarizeBucket(bucket) {
+  if (!bucket?.technicians || !bucket?.regions || !bucket?.operations) {
+    return { target: null, completed: null, pct: null }
+  }
+  const tech = bucket.technicians
+  const regions = bucket.regions
+  const activeTech = new Set(tech.activeIds || [])
+  const activeRegions = new Set(regions.activeIds || [])
+  const techRows = (tech.catalog || []).filter((item) => activeTech.has(item.id))
+  const regionRows = (regions.catalog || []).filter((item) => activeRegions.has(item.id))
+  const techSum = sumRows(techRows, tech.values || {})
+  const regionSum = sumRows(regionRows, regions.values || {})
+  const breakdown =
+    techSum == null && regionSum == null ? null : (techSum || 0) + (regionSum || 0)
+  const targetRaw =
+    String(bucket.operations.target || '').trim() ||
+    (breakdown != null ? String(breakdown) : '')
+  const completedRaw = String(bucket.operations.completed || '').trim()
+  return {
+    target: parseTargetNumber(targetRaw),
+    completed: parseTargetNumber(completedRaw),
+    pct: computeProgressPct(targetRaw, completedRaw)
+  }
+}
+
 function BreakdownList({ title, rows, values, completed, helpId }) {
   if (!rows.length) {
     return (
@@ -76,11 +101,17 @@ function BreakdownList({ title, rows, values, completed, helpId }) {
               <div className="ops-targets-row-metrics">
                 <span>
                   Cíl: <b>{formatNumber(parseTargetNumber(targetValue))}</b>
-                  <MetricInfoTip helpId={helpId === 'targets_technik' ? 'targets_technik' : 'targets_kraj'} label="Popis cíle" />
+                  <MetricInfoTip
+                    helpId={helpId === 'targets_technik' ? 'targets_technik' : 'targets_kraj'}
+                    label="Popis cíle"
+                  />
                 </span>
                 <span>
                   Splněno: <b>{formatNumber(parseTargetNumber(completedValue))}</b>
-                  <MetricInfoTip helpId={helpId === 'targets_technik' ? 'targets_technik' : 'targets_kraj'} label="Popis splněno" />
+                  <MetricInfoTip
+                    helpId={helpId === 'targets_technik' ? 'targets_technik' : 'targets_kraj'}
+                    label="Popis splněno"
+                  />
                 </span>
                 {pct != null ? (
                   <span className="ops-targets-row-pct">
@@ -97,23 +128,52 @@ function BreakdownList({ title, rows, values, completed, helpId }) {
   )
 }
 
+const CZ_SK_PAIR = {
+  cz: { id: 'cz', label: 'zaluzieee - CZ', short: 'CZ', organizationId: 5 },
+  sk: { id: 'sk', label: 'zaluzieee - SK', short: 'SK', organizationId: null }
+}
+
 export default function OperationsTargetsPanel({
   brandId = 'cz',
   organizationId = null,
   brandLabel = 'zaluzieee - CZ',
   sheetTechnicians = null,
   /** 'erp' | 'ovt-sheet' — pokladamee bere techniky + splněno ze sheetu */
-  completedSource = 'erp'
+  completedSource = 'erp',
+  /** U zaluzieee CZ/SK: přepínač + obě celkem pod KPI */
+  enableCzSkSwitch = false
 }) {
-  const targetsBrandId = brandId
-  const fromOvtSheet = completedSource === 'ovt-sheet'
+  const pageBrandId = brandId === 'sk' ? 'sk' : brandId
+  const canSwitchCzSk = enableCzSkSwitch && (pageBrandId === 'cz' || pageBrandId === 'sk')
+
+  const [activeTargetsBrand, setActiveTargetsBrand] = useState(
+    pageBrandId === 'sk' ? 'sk' : pageBrandId === 'cz' ? 'cz' : pageBrandId
+  )
+  const targetsBrandId = canSwitchCzSk ? activeTargetsBrand : pageBrandId
+  const activeMeta = canSwitchCzSk ? CZ_SK_PAIR[targetsBrandId] : null
+  const effectiveOrgId = canSwitchCzSk ? activeMeta?.organizationId ?? null : organizationId
+  const effectiveLabel = canSwitchCzSk ? activeMeta?.label || brandLabel : brandLabel
+  const fromOvtSheet = completedSource === 'ovt-sheet' && !canSwitchCzSk
+
   const [monthKey, setMonthKey] = useState('')
   const [bucket, setBucket] = useState(null)
+  const [pairedSummary, setPairedSummary] = useState(null)
   const [expanded, setExpanded] = useState(false)
   const [view, setView] = useState('technicians')
   const [erpSyncing, setErpSyncing] = useState(false)
 
   const monthOptions = useMemo(() => listMonthOptions(), [])
+  const pairedBrandId = canSwitchCzSk ? (targetsBrandId === 'cz' ? 'sk' : 'cz') : null
+
+  useEffect(() => {
+    if (!canSwitchCzSk) {
+      setActiveTargetsBrand(pageBrandId)
+      return
+    }
+    if (pageBrandId === 'cz' || pageBrandId === 'sk') {
+      setActiveTargetsBrand(pageBrandId)
+    }
+  }, [pageBrandId, canSwitchCzSk])
 
   /** OVT sheet: jména techniků ze sloupce Q → nahradí ERP katalog */
   useEffect(() => {
@@ -151,9 +211,18 @@ export default function OperationsTargetsPanel({
     })
   }, [sheetTechnicians, monthKey, targetsBrandId, fromOvtSheet])
 
+  function refreshPairedSummary(key = monthKey) {
+    if (!canSwitchCzSk || !key || !pairedBrandId) {
+      setPairedSummary(null)
+      return
+    }
+    setPairedSummary(summarizeBucket(readMonthBucket(key, pairedBrandId)))
+  }
+
   async function reloadBucket(key = monthKey, syncRemote = false) {
     if (!key) return
     const initial = readMonthBucket(key, targetsBrandId)
+    refreshPairedSummary(key)
     if (!syncRemote) {
       setBucket(initial)
       return
@@ -165,11 +234,11 @@ export default function OperationsTargetsPanel({
           brandId: targetsBrandId
         })
         setBucket(synced)
-      } else if (organizationId == null) {
+      } else if (effectiveOrgId == null) {
         setBucket(initial)
       } else {
         const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
-          organizationId,
+          organizationId: effectiveOrgId,
           brandId: targetsBrandId
         })
         setBucket(synced)
@@ -178,6 +247,7 @@ export default function OperationsTargetsPanel({
       setBucket(initial)
     } finally {
       setErpSyncing(false)
+      refreshPairedSummary(key)
     }
   }
 
@@ -186,13 +256,14 @@ export default function OperationsTargetsPanel({
     setMonthKey(month)
     setView(readTargetsView())
     reloadBucket(month, true)
-  }, [targetsBrandId, organizationId, completedSource])
+  }, [targetsBrandId, effectiveOrgId, completedSource])
 
   useEffect(() => {
     if (!monthKey) return undefined
     function onStorage(event) {
       if (
         event.key === `prvni.targets.monthly.v1.${targetsBrandId}` ||
+        (pairedBrandId && event.key === `prvni.targets.monthly.v1.${pairedBrandId}`) ||
         event.key === 'prvni.targets.selectedMonth'
       ) {
         reloadBucket(monthKey)
@@ -200,7 +271,7 @@ export default function OperationsTargetsPanel({
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [monthKey, targetsBrandId])
+  }, [monthKey, targetsBrandId, pairedBrandId])
 
   useEffect(() => {
     if (expanded) reloadBucket(monthKey, true)
@@ -210,6 +281,16 @@ export default function OperationsTargetsPanel({
     setMonthKey(nextMonthKey)
     writeSelectedMonthKey(nextMonthKey)
     reloadBucket(nextMonthKey, true)
+  }
+
+  function changeTargetsBrand(nextId) {
+    if (!canSwitchCzSk || (nextId !== 'cz' && nextId !== 'sk')) return
+    setActiveTargetsBrand(nextId)
+    writeTargetsBrandId(nextId)
+    if (nextId === 'sk') {
+      setView('regions')
+      writeTargetsView('regions')
+    }
   }
 
   const tech = bucket?.technicians
@@ -235,16 +316,23 @@ export default function OperationsTargetsPanel({
     return (techSum || 0) + (regionSum || 0)
   }, [techRows, regionRows, tech?.values, regions?.values])
 
-  // Cíl: ruční „Cíl celkem“, jinak součet cílů z rozpadu
   const displayTarget =
     String(operations?.target || '').trim() ||
     (breakdownTarget != null ? String(breakdownTarget) : '')
-  // Splněno celkem: počet řádků s datum_zamereni v měsíci (ERP nebo OVT sheet)
   const displayCompleted = String(operations?.completed || '').trim()
 
   const summaryPct = computeProgressPct(displayTarget, displayCompleted)
   const targetFillPct = computeProgressPct(displayTarget, displayCompleted) ?? 0
   const completedFillPct = targetFillPct
+
+  const activeSummary = useMemo(
+    () => ({
+      target: parseTargetNumber(displayTarget),
+      completed: parseTargetNumber(displayCompleted),
+      pct: summaryPct
+    }),
+    [displayTarget, displayCompleted, summaryPct]
+  )
 
   if (!bucket || !tech || !regions || !operations) return null
 
@@ -255,12 +343,16 @@ export default function OperationsTargetsPanel({
     }
     setBucket(next)
     writeMonthBucket(monthKey, next, targetsBrandId)
+    if (canSwitchCzSk) refreshPairedSummary(monthKey)
   }
 
   function changeView(nextView) {
     setView(nextView)
     writeTargetsView(nextView)
   }
+
+  const czSummary = targetsBrandId === 'cz' ? activeSummary : pairedSummary
+  const skSummary = targetsBrandId === 'sk' ? activeSummary : pairedSummary
 
   return (
     <section className={`sla-block sla-block-nested sla-block-targets${expanded ? ' is-expanded' : ''}`}>
@@ -273,15 +365,40 @@ export default function OperationsTargetsPanel({
           ? fromOvtSheet
             ? 'Cíl zadáte ručně. Technici = sloupec Q (OVT). Splněno = počet řádků s Datum zaměření (P) ve zvoleném měsíci ze sheetu.'
             : `Cíl zadáte ručně. Splněno = počet naplánovaných zaměření (datum_zamereni) v měsíci z ERP${
-                organizationId != null ? ` · organizace č. ${organizationId}` : ''
+                effectiveOrgId != null ? ` · organizace č. ${effectiveOrgId}` : ''
               }.`
-          : 'Klikněte pro rozpad targetů — kraje a technici.'}
+          : canSwitchCzSk
+            ? 'Přepněte CZ / SK, nebo rozbalte rozpad targetů.'
+            : 'Klikněte pro rozpad targetů — kraje a technici.'}
         {erpSyncing
           ? fromOvtSheet
             ? ' · Načítám techniky a splněno ze sheetu…'
             : ' · Načítám splněno z ERP…'
           : ''}
       </p>
+
+      {canSwitchCzSk ? (
+        <div className="targets-view-switch ops-targets-brand-switch" role="tablist" aria-label="Target CZ / SK">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={targetsBrandId === 'cz'}
+            className={`targets-view-btn${targetsBrandId === 'cz' ? ' is-active' : ''}`}
+            onClick={() => changeTargetsBrand('cz')}
+          >
+            Target CZ
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={targetsBrandId === 'sk'}
+            className={`targets-view-btn${targetsBrandId === 'sk' ? ' is-active' : ''}`}
+            onClick={() => changeTargetsBrand('sk')}
+          >
+            Target SK
+          </button>
+        </div>
+      ) : null}
 
       <button
         type="button"
@@ -290,7 +407,7 @@ export default function OperationsTargetsPanel({
         aria-expanded={expanded}
       >
         <MetricLabel helpId="targets_celkem" className="sla-kpi-label">
-          Target celkem · {brandLabel} · {formatMonthLabel(monthKey)}
+          Target celkem · {effectiveLabel} · {formatMonthLabel(monthKey)}
         </MetricLabel>
         <strong className="sla-kpi-value">
           {summaryPct != null ? `${summaryPct} %` : '—'}
@@ -299,6 +416,17 @@ export default function OperationsTargetsPanel({
           Splněno {formatNumber(parseTargetNumber(displayCompleted))} / cíl{' '}
           {formatNumber(parseTargetNumber(displayTarget))}
         </span>
+        {canSwitchCzSk ? (
+          <span className="sla-kpi-hint">
+            Celkem CZ:{' '}
+            {formatNumber(czSummary?.completed)} / {formatNumber(czSummary?.target)}
+            {czSummary?.pct != null ? ` (${czSummary.pct} %)` : ''}
+            {' · '}
+            Celkem SK:{' '}
+            {formatNumber(skSummary?.completed)} / {formatNumber(skSummary?.target)}
+            {skSummary?.pct != null ? ` (${skSummary.pct} %)` : ''}
+          </span>
+        ) : null}
         <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
       </button>
 
@@ -322,7 +450,7 @@ export default function OperationsTargetsPanel({
                 className={`targets-view-btn${view === 'regions' ? ' is-active' : ''}`}
                 onClick={() => changeView('regions')}
               >
-                Kraje
+                {targetsBrandId === 'sk' ? 'Slovensko' : 'Kraje'}
               </button>
             </div>
             <div className="targets-month-switch" aria-label="Měsíc targetů">
@@ -390,7 +518,12 @@ export default function OperationsTargetsPanel({
                 fillPct={completedFillPct}
                 badge="Splněno"
                 tone="completed"
-                readOnly
+                readOnly={!(canSwitchCzSk && targetsBrandId === 'sk')}
+                onChange={
+                  canSwitchCzSk && targetsBrandId === 'sk'
+                    ? (event) => persistOperations({ completed: event.target.value })
+                    : undefined
+                }
               />
             </label>
           </div>
@@ -398,7 +531,7 @@ export default function OperationsTargetsPanel({
           <div className="ops-targets-columns">
             {view === 'regions' ? (
               <BreakdownList
-                title="Kraje"
+                title={targetsBrandId === 'sk' ? 'Slovensko (sk)' : 'Kraje'}
                 rows={regionRows}
                 values={regions.values}
                 completed={regions.completed}
