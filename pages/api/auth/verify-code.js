@@ -1,5 +1,6 @@
 import { buildAuthCookie, createAuthToken, isAllowedEmail, getAllowedDomain } from '@/lib/auth'
 import { verifyCodeChallenge } from '@/lib/auth-challenge'
+import { getHomePathForEmail } from '@/lib/access-control'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -29,5 +30,9 @@ export default async function handler(req, res) {
   const secure = process.env.NODE_ENV === 'production'
   res.setHeader('Set-Cookie', `${buildAuthCookie(token)}${secure ? '; Secure' : ''}`)
 
-  return res.status(200).json({ ok: true, email })
+  return res.status(200).json({
+    ok: true,
+    email,
+    homePath: await getHomePathForEmail(email)
+  })
 }

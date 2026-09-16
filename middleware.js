@@ -1,16 +1,8 @@
 import { NextResponse } from 'next/server'
+import { isPublicOrAuthPath } from '@/lib/access-control'
 
 const AUTH_COOKIE_NAME = 'dashboard_auth'
 const AUTH_SECRET = process.env.APP_AUTH_SECRET || 'local-dashboard-auth-secret'
-
-function isAllowedPath(pathname) {
-  return (
-    pathname === '/login' ||
-    pathname.startsWith('/_next/') ||
-    pathname === '/favicon.ico' ||
-    pathname.startsWith('/api/auth/')
-  )
-}
 
 function toBase64Url(bytes) {
   let binary = ''
@@ -67,10 +59,14 @@ async function hasValidSession(token) {
   return true
 }
 
+/**
+ * Middleware ověřuje jen přihlášení.
+ * Omezení sekcí (Operátoři-only) řeší AccessGate + /api/auth/me podle live seznamu.
+ */
 export async function middleware(request) {
   const { pathname, search } = request.nextUrl
 
-  if (isAllowedPath(pathname)) {
+  if (isPublicOrAuthPath(pathname)) {
     return NextResponse.next()
   }
 

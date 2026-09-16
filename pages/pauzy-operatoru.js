@@ -5,6 +5,7 @@ import DrilldownCount from '@/components/DrilldownCount'
 import PauseDrilldown from '@/components/PauseDrilldown'
 import OperatorErrorsDrilldown from '@/components/OperatorErrorsDrilldown'
 import OperatorDirectory from '@/components/OperatorDirectory'
+import OperatorsAccessPanel from '@/components/OperatorsAccessPanel'
 import { getMonthToDateRange } from '@/lib/metrics-query'
 import {
   TEAM_IDS,
@@ -565,10 +566,11 @@ export default function OperatorPausesPage() {
     })
   }
 
-  function openMissedCallbackDrilldown(variant, title, subtitle) {
+  function openMissedCallbackDrilldown(variant, title, subtitle, hoursAxis = 'all') {
     openDrilldown({
       metric: 'missed_callbacks',
       missedVariant: variant,
+      hoursAxis,
       title,
       subtitle
     })
@@ -634,6 +636,8 @@ export default function OperatorPausesPage() {
                   ) : null}
                 </button>
               </div>
+
+              <OperatorsAccessPanel />
 
               {(syncState === 'running' ||
                 syncState === 'error' ||
@@ -856,20 +860,21 @@ export default function OperatorPausesPage() {
                     </span>
                   </article>
                   <article className="pauses-kpi pauses-kpi-clickable">
-                    <span className="pauses-kpi-label">Průměrná doba do navolání</span>
+                    <span className="pauses-kpi-label">Navolání · pracovní doba</span>
                     {missedCallbackLoading ? (
                       <strong className="pauses-kpi-value">…</strong>
                     ) : (
                       <DrilldownCount
-                        count={missedCallbackSummary.called_back}
-                        text={formatHours(missedCallbackSummary.avg_hours_to_callback)}
+                        count={missedCallbackSummary.working?.called_back || 0}
+                        text={formatHours(missedCallbackSummary.working?.avg_hours_to_callback)}
                         className="pauses-kpi-value"
-                        title="Kliknutím zobrazíte navolané zmeškané hovory"
+                        title="Průměr do navolání v pracovní době (Po–Pá 8–20, So–Ne 10–18)"
                         onOpen={() =>
                           openMissedCallbackDrilldown(
                             'called_back',
-                            'Navolané zmeškané hovory',
-                            'První odchozí hovor na stejné číslo po zmeškání'
+                            'Navolání v pracovní době',
+                            'Po–Pá 8–20 · So–Ne 10–18 · dle času zmeškaného hovoru',
+                            'working'
                           )
                         }
                       />
@@ -877,7 +882,33 @@ export default function OperatorPausesPage() {
                     <span className="pauses-kpi-hint">
                       {missedCallbackLoading
                         ? 'počítám…'
-                        : `${formatNumber(missedCallbackSummary.called_back, 0)} navoláno`}
+                        : `${formatNumber(missedCallbackSummary.working?.called_back || 0, 0)} navoláno`}
+                    </span>
+                  </article>
+                  <article className="pauses-kpi pauses-kpi-clickable">
+                    <span className="pauses-kpi-label">Navolání · mimo prac. dobu</span>
+                    {missedCallbackLoading ? (
+                      <strong className="pauses-kpi-value">…</strong>
+                    ) : (
+                      <DrilldownCount
+                        count={missedCallbackSummary.outside?.called_back || 0}
+                        text={formatHours(missedCallbackSummary.outside?.avg_hours_to_callback)}
+                        className="pauses-kpi-value"
+                        title="Průměr do navolání mimo pracovní dobu"
+                        onOpen={() =>
+                          openMissedCallbackDrilldown(
+                            'called_back',
+                            'Navolání mimo pracovní dobu',
+                            'Mimo Po–Pá 8–20 a So–Ne 10–18 · dle času zmeškaného hovoru',
+                            'outside'
+                          )
+                        }
+                      />
+                    )}
+                    <span className="pauses-kpi-hint">
+                      {missedCallbackLoading
+                        ? 'počítám…'
+                        : `${formatNumber(missedCallbackSummary.outside?.called_back || 0, 0)} navoláno`}
                     </span>
                   </article>
                   <article className="pauses-kpi pauses-kpi-clickable pauses-kpi-warn">

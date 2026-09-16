@@ -70,7 +70,7 @@ export default function LoginPage() {
         throw new Error(data?.error || 'Ověření kódu se nepodařilo.')
       }
 
-      router.replace(nextPath)
+      router.replace(nextPath === '/' && data.homePath ? data.homePath : nextPath)
     } catch (verifyError) {
       setError(verifyError.message || 'Ověření kódu se nepodařilo.')
     } finally {

@@ -308,10 +308,11 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     setNavolaniDrilldown({ metric, title, operatorName, brand: brand.id })
   }
 
-  function openCallbackDrilldown(variant, title, subtitle) {
+  function openCallbackDrilldown(variant, title, subtitle, hoursAxis = 'all') {
     setCallbackDrilldown({
       metric: 'missed_callbacks',
       missedVariant: variant,
+      hoursAxis,
       brand: brand.id,
       title,
       subtitle
@@ -470,6 +471,16 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                                 {item.unanswered.toLocaleString('cs-CZ')} nezvednutých
                                 <MetricInfoTip helpId="sla_queue_unanswered" />
                               </span>
+                              {' · '}
+                              <span className="sla-queue-breakdown-hint-part">
+                                {(item.working_hours_calls || 0).toLocaleString('cs-CZ')} pracovní
+                                <MetricInfoTip helpId="sla_working_hours" />
+                              </span>
+                              {' · '}
+                              <span className="sla-queue-breakdown-hint-part">
+                                {(item.outside_hours_calls || 0).toLocaleString('cs-CZ')} mimo
+                                <MetricInfoTip helpId="sla_outside_hours" />
+                              </span>
                             </span>
                           </article>
                         ))}
@@ -484,6 +495,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                           {metrics.queue_breakdown.totals.answered.toLocaleString('cs-CZ')} zvednutých
                           {' · '}
                           {metrics.queue_breakdown.totals.unanswered.toLocaleString('cs-CZ')} nezvednutých
+                          {' · '}
+                          {(metrics.queue_breakdown.totals.working_hours_calls || 0).toLocaleString('cs-CZ')} pracovní
+                          {' · '}
+                          {(metrics.queue_breakdown.totals.outside_hours_calls || 0).toLocaleString('cs-CZ')} mimo
                         </p>
                       ) : null}
                     </div>
@@ -519,6 +534,40 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             </section>
           ) : null}
 
+          {!loading && !error && metrics ? (
+            <section className="sla-block sla-block-nested sla-block-hours">
+              <h2 className="sla-block-title">
+                Hovory · pracovní / mimo pracovní dobu
+                <MetricInfoTip helpId="sla_working_hours" />
+              </h2>
+              <p className="sla-block-desc">
+                Příchozí hovory na linkách {brand.pageTitle}. Pracovní doba: Po–Pá 8–20 · So–Ne 10–18
+                (Europe/Prague). Mimo = ostatní časy.
+              </p>
+              <div className="sla-kpi-breakdown" aria-label="Hovory podle pracovní doby">
+                <article className="sla-kpi sla-kpi-child">
+                  <MetricLabel helpId="sla_working_hours">V pracovní době</MetricLabel>
+                  <strong className="sla-kpi-value">
+                    {(metrics.working_hours_calls || 0).toLocaleString('cs-CZ')}
+                  </strong>
+                  <span className="sla-kpi-hint">Po–Pá 8–20 · So–Ne 10–18</span>
+                </article>
+                <article className="sla-kpi sla-kpi-child">
+                  <MetricLabel helpId="sla_outside_hours">Mimo pracovní dobu</MetricLabel>
+                  <strong className="sla-kpi-value">
+                    {(metrics.outside_hours_calls || 0).toLocaleString('cs-CZ')}
+                  </strong>
+                  <span className="sla-kpi-hint">
+                    {(
+                      (metrics.working_hours_calls || 0) + (metrics.outside_hours_calls || 0)
+                    ).toLocaleString('cs-CZ')}{' '}
+                    příchozích celkem na linkách značky
+                  </span>
+                </article>
+              </div>
+            </section>
+          ) : null}
+
           {!callbackLoading && !callbackError && callbackSummary ? (
             <section className={`sla-block sla-block-nested sla-block-callback${callbackOpen ? ' is-expanded' : ''}`}>
               <h2 className="sla-block-title">
@@ -526,8 +575,8 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 <MetricInfoTip helpId="missed_callback_avg" />
               </h2>
               <p className="sla-block-desc">
-                Zmeškaný příchozí hovor (nezvednutý) → první odchozí zpět na stejné číslo.
-                Fronty {brand.pageTitle}. Období jako u filtru.
+                Zmeškaný příchozí → první odchozí zpět. Dvě osy dle času zmeškání (Europe/Prague):
+                pracovní doba Po–Pá 8–20 / So–Ne 10–18 · mimo = ostatní časy. Fronty {brand.pageTitle}.
               </p>
 
               <button
@@ -537,7 +586,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 aria-expanded={callbackOpen}
               >
                 <MetricLabel helpId="missed_callback_avg" className="sla-kpi-label">
-                  Průměrná doba do navolání
+                  Průměrná doba do navolání · celkem
                 </MetricLabel>
                 <strong className="sla-kpi-value">
                   {formatHours(callbackSummary.avg_hours_to_callback)}
@@ -545,6 +594,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 <span className="sla-kpi-hint">
                   {formatNumber(callbackSummary.called_back)} navoláno z{' '}
                   {formatNumber(callbackSummary.total_missed)} zmeškaných
+                  {' · '}
+                  pracovní {formatHours(callbackSummary.working?.avg_hours_to_callback)}
+                  {' / '}
+                  mimo {formatHours(callbackSummary.outside?.avg_hours_to_callback)}
                 </span>
                 <span className="sla-kpi-root-toggle">
                   {callbackOpen ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}
@@ -553,6 +606,48 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
 
               {callbackOpen ? (
                 <div className="sla-kpi-breakdown" aria-label="Rozpad zmeškaných hovorů">
+                  <article className="sla-kpi sla-kpi-child">
+                    <MetricLabel helpId="missed_callback_working">V pracovní době</MetricLabel>
+                    <DrilldownCount
+                      count={callbackSummary.working?.called_back || 0}
+                      text={formatHours(callbackSummary.working?.avg_hours_to_callback)}
+                      className="sla-kpi-value"
+                      title="Navolané zmeškané v pracovní době"
+                      onOpen={() =>
+                        openCallbackDrilldown(
+                          'called_back',
+                          `${brand.pageTitle} — Navolání v pracovní době`,
+                          'Po–Pá 8–20 · So–Ne 10–18 · dle času zmeškaného hovoru',
+                          'working'
+                        )
+                      }
+                    />
+                    <span className="sla-kpi-hint">
+                      {formatNumber(callbackSummary.working?.called_back)} navoláno ·{' '}
+                      {formatNumber(callbackSummary.working?.total_missed)} zmeškaných
+                    </span>
+                  </article>
+                  <article className="sla-kpi sla-kpi-child">
+                    <MetricLabel helpId="missed_callback_outside">Mimo pracovní dobu</MetricLabel>
+                    <DrilldownCount
+                      count={callbackSummary.outside?.called_back || 0}
+                      text={formatHours(callbackSummary.outside?.avg_hours_to_callback)}
+                      className="sla-kpi-value"
+                      title="Navolané zmeškané mimo pracovní dobu"
+                      onOpen={() =>
+                        openCallbackDrilldown(
+                          'called_back',
+                          `${brand.pageTitle} — Navolání mimo pracovní dobu`,
+                          'Mimo Po–Pá 8–20 a So–Ne 10–18 · dle času zmeškaného hovoru',
+                          'outside'
+                        )
+                      }
+                    />
+                    <span className="sla-kpi-hint">
+                      {formatNumber(callbackSummary.outside?.called_back)} navoláno ·{' '}
+                      {formatNumber(callbackSummary.outside?.total_missed)} zmeškaných
+                    </span>
+                  </article>
                   <article className="sla-kpi sla-kpi-child">
                     <span className="sla-kpi-label">Zmeškané příchozí</span>
                     <DrilldownCount
@@ -567,25 +662,6 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                         )
                       }
                     />
-                  </article>
-                  <article className="sla-kpi sla-kpi-child">
-                    <MetricLabel helpId="missed_callback_avg">Průměr do navolání</MetricLabel>
-                    <DrilldownCount
-                      count={callbackSummary.called_back}
-                      text={formatHours(callbackSummary.avg_hours_to_callback)}
-                      className="sla-kpi-value"
-                      title="Kliknutím zobrazíte navolané zmeškané hovory"
-                      onOpen={() =>
-                        openCallbackDrilldown(
-                          'called_back',
-                          `${brand.pageTitle} — Navolané zmeškané`,
-                          'První odchozí hovor na stejné číslo po zmeškání'
-                        )
-                      }
-                    />
-                    <span className="sla-kpi-hint">
-                      {formatNumber(callbackSummary.called_back)} navoláno
-                    </span>
                   </article>
                   <article className="sla-kpi sla-kpi-child">
                     <span className="sla-kpi-label">Ještě nenavolané</span>
@@ -612,7 +688,12 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               metrics={navolaniMetrics}
               expanded={navolaniOpen}
               onToggle={() => setNavolaniOpen((open) => !open)}
-              onOpenMetric={navolaniSource === 'pokladamee-ovt-sheet' ? null : openNavolaniMetric}
+              onOpenMetric={
+                navolaniSource === 'pokladamee-ovt-sheet' ||
+                navolaniSource === 'malujemeee-ovt-sheet'
+                  ? null
+                  : openNavolaniMetric
+              }
               navolaniHint={brand.navolaniHint}
               organizationId={brand.organizationId}
               source={navolaniSource}

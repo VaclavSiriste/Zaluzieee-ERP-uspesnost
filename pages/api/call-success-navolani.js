@@ -8,9 +8,10 @@ import { getPool } from '@/lib/db-esm'
 import { resolveDateRange, formatDateOnly } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
 import {
-  fetchPokladameeOvtMetrics,
-  isPokladameeOvtSheetConfigured
-} from '@/lib/pokladamee-ovt-sheet'
+  fetchOvtSheetMetrics,
+  isOvtSheetConfigured,
+  resolveOvtSheetBrand
+} from '@/lib/ovt-sheet'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -22,19 +23,19 @@ export default async function handler(req, res) {
   const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : ''
   const brandId = typeof req.query.brand === 'string' ? req.query.brand : 'cz'
 
-  // pokladamee: úspěšnost z OVT sheetu (L / K), ne z ERP
-  if (brandId === 'pokladamee') {
-    if (!isPokladameeOvtSheetConfigured()) {
+  // pokladamee / malujemeee: úspěšnost z OVT sheetu (L / K), ne z ERP
+  const ovtCfg = resolveOvtSheetBrand(brandId)
+  if (ovtCfg) {
+    if (!isOvtSheetConfigured(brandId)) {
       return res.status(503).json({
-        error:
-          'pokladamee úspěšnost čte list podle gid=1262379590. Nastavte POKLADAMEE_OVT_SHEET_WEBAPP_URL (viz scripts/google-apps-script-pokladamee-ovt.gs).'
+        error: `${brandId} úspěšnost čte Google Sheet (gid=${ovtCfg.gid}). Nastavte ${ovtCfg.envWebappUrl}.`
       })
     }
     try {
       const { start, end } = resolveDateRange({ startDate, endDate, period })
       const rangeStart = formatDateOnly(start)
       const rangeEnd = formatDateOnly(end)
-      const data = await fetchPokladameeOvtMetrics({
+      const data = await fetchOvtSheetMetrics(brandId, {
         startDate: rangeStart,
         endDate: rangeEnd
       })
@@ -46,13 +47,14 @@ export default async function handler(req, res) {
         end: end.toISOString(),
         startDate: rangeStart,
         endDate: rangeEnd,
-        source: 'pokladamee-ovt-sheet',
+        source: ovtCfg.source,
         date_basis: 'datum_navolani',
         metrics: data.success,
-        technicians: data.technicians
+        technicians: data.technicians,
+        targets: data.targets
       })
     } catch (error) {
-      console.error('call-success-navolani (pokladamee sheet):', error.message)
+      console.error(`call-success-navolani (${brandId} sheet):`, error.message)
       return res.status(500).json({ error: error.message || 'Chyba načtení úspěšnosti ze sheetu' })
     }
   }

@@ -34,7 +34,7 @@ button {
   cursor: pointer;
 }
 
-button:not(.drilldown-close):not(.drilldown-load-more):not(.drilldown-chip):not(.drilldown-region-card):not(.filter-assistant-trigger):not(.filter-assistant-close):not(.period-chip):not(.login-primary-button):not(.login-secondary-button):not(.pauses-stat):not(.pauses-bar-track):not(.pauses-directory-btn):not(.targets-directory-btn):not(.targets-view-btn):not(.targets-month-nav):not(.pauses-sync-btn):not(.pauses-kpi-button):not(.pauses-card-hide):not(.pauses-summary-item):not(.pauses-team-btn):not(.operator-directory-action):not(.operator-directory-toggle):not(.operator-error-action):hover {
+button:not(.drilldown-close):not(.drilldown-load-more):not(.drilldown-chip):not(.drilldown-region-card):not(.filter-assistant-trigger):not(.filter-assistant-close):not(.period-chip):not(.login-primary-button):not(.login-secondary-button):not(.pauses-stat):not(.pauses-bar-track):not(.pauses-directory-btn):not(.targets-directory-btn):not(.targets-view-btn):not(.targets-month-nav):not(.pauses-sync-btn):not(.pauses-kpi-button):not(.pauses-card-hide):not(.pauses-summary-item):not(.pauses-team-btn):not(.operator-directory-action):not(.operator-directory-toggle):not(.operator-error-action):not(.ops-access-toggle):not(.ops-access-remove):hover {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   background-color: #e9edff;
   color: #1e2a52;
@@ -1950,6 +1950,137 @@ h6 {
   align-items: center;
   gap: 10px;
   margin-top: 14px;
+}
+
+.ops-access-panel {
+  margin-top: 14px;
+  border: 1px solid #dbe3f4;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(30, 42, 82, 0.05);
+}
+
+.ops-access-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 12px 16px;
+  color: #1e2a52;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ops-access-toggle-meta {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.ops-access-body {
+  padding: 14px 16px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.ops-access-desc {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.ops-access-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ops-access-form input {
+  flex: 1 1 220px;
+  min-width: 180px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+.ops-access-form button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ops-access-form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ops-access-msg {
+  margin: 0 0 10px;
+  color: #047857;
+  font-size: 0.9rem;
+}
+
+.ops-access-msg.is-error {
+  color: #b91c1c;
+}
+
+.ops-access-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.ops-access-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.ops-access-empty {
+  justify-content: center;
+  color: #94a3b8;
+  border-style: dashed;
+}
+
+.ops-access-remove {
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+
+.access-gate-loading {
+  min-height: 40vh;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .pauses-sync-btn,

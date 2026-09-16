@@ -153,6 +153,7 @@ function buildQueryParams(drilldown, filters, offset, typeFilter = null) {
     return new URLSearchParams({
       ...base,
       variant: drilldown.missedVariant || 'all',
+      hoursAxis: drilldown.hoursAxis || 'all',
       ...(filters.brand ? { brand: filters.brand } : {}),
       ...(drilldown.brand ? { brand: drilldown.brand } : {})
     })
@@ -374,8 +375,13 @@ export default function PauseDrilldown({ open, onClose, drilldown, filters }) {
                 {!isOrders && !isMissedCallbacks
                   ? ` · ${formatDuration(data.duration_seconds || 0)}`
                   : null}
-                {isMissedCallbacks && data.summary?.avg_hours_to_callback != null
-                  ? ` · průměr do navolání ${formatHours(data.summary.avg_hours_to_callback)}`
+                {isMissedCallbacks && data.summary?.avg_hours_to_callback_filtered != null
+                  ? ` · průměr do navolání ${formatHours(data.summary.avg_hours_to_callback_filtered)}`
+                  : isMissedCallbacks && data.summary?.avg_hours_to_callback != null
+                    ? ` · průměr do navolání ${formatHours(data.summary.avg_hours_to_callback)}`
+                    : null}
+                {isMissedCallbacks && data.hours_axis_label && data.hoursAxis !== 'all'
+                  ? ` · ${data.hours_axis_label}`
                   : null}
                 {typeFilter?.pauseName ? ` · filtr: ${typeFilter.pauseName}` : null}
               </p>

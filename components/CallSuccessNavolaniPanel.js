@@ -54,7 +54,11 @@ export default function CallSuccessNavolaniPanel({
 }) {
   if (!metrics) return null
 
-  const fromSheet = source === 'pokladamee-ovt-sheet' || metrics.source === 'pokladamee-ovt-sheet'
+  const fromSheet =
+    source === 'pokladamee-ovt-sheet' ||
+    source === 'malujemeee-ovt-sheet' ||
+    metrics.source === 'pokladamee-ovt-sheet' ||
+    metrics.source === 'malujemeee-ovt-sheet'
   const breakdownItems = fromSheet
     ? [
         {

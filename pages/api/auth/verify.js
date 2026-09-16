@@ -1,5 +1,6 @@
 import { buildAuthCookie, createAuthToken, isAllowedEmail } from '@/lib/auth'
 import { verifyMagicLoginToken } from '@/lib/auth-challenge'
+import { canAccessPath, getHomePathForEmail } from '@/lib/access-control'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -21,7 +22,9 @@ export default async function handler(req, res) {
 
   const sessionToken = createAuthToken(payload.email)
   const secure = process.env.NODE_ENV === 'production'
-  const nextPath = payload.next || nextFromQuery
+  const requested = payload.next || nextFromQuery
+  const allowed = await canAccessPath(payload.email, requested)
+  const nextPath = allowed ? requested : await getHomePathForEmail(payload.email)
 
   res.setHeader('Set-Cookie', `${buildAuthCookie(sessionToken)}${secure ? '; Secure' : ''}`)
   res.writeHead(302, { Location: nextPath })

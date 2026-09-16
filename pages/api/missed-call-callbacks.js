@@ -7,6 +7,7 @@ import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
 import { lookupOrdersByPhoneKeys, phoneKeyFromClid } from '@/lib/erp-phone-orders'
 import {
   buildMissedCallbackCte,
+  missedCallbackHoursAxisFilter,
   missedCallbackVariantFilter
 } from '@/lib/missed-call-callback-sql'
 import { resolveOperationsBrand } from '@/lib/operations-brands'
@@ -23,6 +24,12 @@ const VARIANT_LABELS = {
   all: 'Všechny zmeškané příchozí',
   called_back: 'Navolané zmeškané',
   open: 'Nenavolané zmeškané'
+}
+
+const HOURS_AXIS_LABELS = {
+  all: 'Všechny časy',
+  working: 'Pracovní doba (Po–Pá 8–20, So–Ne 10–18)',
+  outside: 'Mimo pracovní dobu'
 }
 
 const TRANSIENT_DB_ERRORS = [
@@ -95,12 +102,40 @@ function mapRow(row, orderMatch = null) {
     end_time: row.callback_at,
     duration_seconds: hours != null && Number.isFinite(hours) ? Math.round(hours * 3600) : 0,
     hours_to_callback: hours,
+    is_working_hours: row.is_working_hours === true,
+    hours_axis_label: row.is_working_hours === true ? 'Pracovní doba' : 'Mimo pracovní dobu',
     callback_operator_id: row.callback_user || null,
     callback_operator_name: row.callback_operator_name || null,
     operator_name: row.callback_operator_name || '—',
     order_id: orderMatch?.order_id || null,
     customer_name: orderMatch?.customer_name || null,
     detail_url: orderMatch?.detail_url || null
+  }
+}
+
+function numOrNull(value) {
+  return value != null && Number.isFinite(Number(value)) ? Number(value) : null
+}
+
+function buildSummary(row) {
+  return {
+    total_missed: Number(row.total_missed) || 0,
+    called_back: Number(row.called_back) || 0,
+    not_called_back: Number(row.not_called_back) || 0,
+    avg_hours_to_callback: numOrNull(row.avg_hours_to_callback),
+    working: {
+      total_missed: Number(row.working_total_missed) || 0,
+      called_back: Number(row.working_called_back) || 0,
+      not_called_back: Number(row.working_not_called_back) || 0,
+      avg_hours_to_callback: numOrNull(row.working_avg_hours)
+    },
+    outside: {
+      total_missed: Number(row.outside_total_missed) || 0,
+      called_back: Number(row.outside_called_back) || 0,
+      not_called_back: Number(row.outside_not_called_back) || 0,
+      avg_hours_to_callback: numOrNull(row.outside_avg_hours)
+    },
+    working_hours_rule: 'Po–Pá 8:00–20:00 · So–Ne 10:00–18:00 · Europe/Prague · dle času zmeškaného hovoru'
   }
 }
 
@@ -121,6 +156,8 @@ export default async function handler(req, res) {
   const brand = brandRaw && resolveOperationsBrand(brandRaw) ? brandRaw : null
   const variantRaw = cleanParam(req.query.variant).toLowerCase() || 'all'
   const variant = VARIANT_LABELS[variantRaw] ? variantRaw : 'all'
+  const hoursAxisRaw = cleanParam(req.query.hoursAxis).toLowerCase() || 'all'
+  const hoursAxis = HOURS_AXIS_LABELS[hoursAxisRaw] ? hoursAxisRaw : 'all'
   const summaryOnly = req.query.summary === '1' || req.query.summary === 'true'
   const parsedLimit = Math.min(
     Math.max(parseInt(String(req.query.limit || DEFAULT_LIMIT), 10) || DEFAULT_LIMIT, 1),
@@ -132,6 +169,7 @@ export default async function handler(req, res) {
     const { start, end } = resolveDateRange({ startDate, endDate, period })
     const params = [start, end]
     const variantFilter = missedCallbackVariantFilter(variant)
+    const hoursAxisFilter = missedCallbackHoursAxisFilter(hoursAxis)
     const MISSED_CALLBACK_CTE = buildMissedCallbackCte({ brandId: brand })
 
     const summarySql = `
@@ -140,22 +178,26 @@ export default async function handler(req, res) {
         COUNT(*)::int AS total_missed,
         COUNT(*) FILTER (WHERE mc.callback_at IS NOT NULL)::int AS called_back,
         COUNT(*) FILTER (WHERE mc.callback_at IS NULL)::int AS not_called_back,
-        AVG(mc.hours_to_callback) FILTER (WHERE mc.callback_at IS NOT NULL)::float8 AS avg_hours_to_callback
+        AVG(mc.hours_to_callback) FILTER (WHERE mc.callback_at IS NOT NULL)::float8 AS avg_hours_to_callback,
+
+        COUNT(*) FILTER (WHERE mc.is_working_hours IS TRUE)::int AS working_total_missed,
+        COUNT(*) FILTER (WHERE mc.is_working_hours IS TRUE AND mc.callback_at IS NOT NULL)::int AS working_called_back,
+        COUNT(*) FILTER (WHERE mc.is_working_hours IS TRUE AND mc.callback_at IS NULL)::int AS working_not_called_back,
+        AVG(mc.hours_to_callback) FILTER (
+          WHERE mc.is_working_hours IS TRUE AND mc.callback_at IS NOT NULL
+        )::float8 AS working_avg_hours,
+
+        COUNT(*) FILTER (WHERE mc.is_working_hours IS FALSE)::int AS outside_total_missed,
+        COUNT(*) FILTER (WHERE mc.is_working_hours IS FALSE AND mc.callback_at IS NOT NULL)::int AS outside_called_back,
+        COUNT(*) FILTER (WHERE mc.is_working_hours IS FALSE AND mc.callback_at IS NULL)::int AS outside_not_called_back,
+        AVG(mc.hours_to_callback) FILTER (
+          WHERE mc.is_working_hours IS FALSE AND mc.callback_at IS NOT NULL
+        )::float8 AS outside_avg_hours
       FROM matched mc
     `
 
     const summaryResult = await queryWithRetry(summarySql, params)
-    const summaryRow = summaryResult.rows[0] || {}
-
-    const summary = {
-      total_missed: Number(summaryRow.total_missed) || 0,
-      called_back: Number(summaryRow.called_back) || 0,
-      not_called_back: Number(summaryRow.not_called_back) || 0,
-      avg_hours_to_callback:
-        summaryRow.avg_hours_to_callback != null
-          ? Number(summaryRow.avg_hours_to_callback)
-          : null
-    }
+    const summary = buildSummary(summaryResult.rows[0] || {})
 
     if (summaryOnly) {
       const payload = {
@@ -175,6 +217,7 @@ export default async function handler(req, res) {
       FROM matched mc
       WHERE 1=1
         ${variantFilter}
+        ${hoursAxisFilter}
     `
     const countResult = await queryWithRetry(countSql, params)
     const total = Number(countResult.rows[0]?.total) || 0
@@ -189,6 +232,7 @@ export default async function handler(req, res) {
         mc.callback_at,
         mc.callback_user,
         mc.hours_to_callback,
+        mc.is_working_hours,
         COALESCE(
           NULLIF(TRIM(u.title), ''),
           NULLIF(TRIM(u.name), ''),
@@ -199,6 +243,7 @@ export default async function handler(req, res) {
       LEFT JOIN "user" u ON u."user" = mc.callback_user
       WHERE 1=1
         ${variantFilter}
+        ${hoursAxisFilter}
       ORDER BY mc.missed_at DESC NULLS LAST
       LIMIT $3 OFFSET $4
     `
@@ -211,14 +256,26 @@ export default async function handler(req, res) {
     })
     const durationSeconds = items.reduce((sum, item) => sum + (item.duration_seconds || 0), 0)
 
+    const axisAvg =
+      hoursAxis === 'working'
+        ? summary.working.avg_hours_to_callback
+        : hoursAxis === 'outside'
+          ? summary.outside.avg_hours_to_callback
+          : summary.avg_hours_to_callback
+
     return res.status(200).json({
       period,
       brand,
       variant,
+      hoursAxis,
       label: VARIANT_LABELS[variant],
+      hours_axis_label: HOURS_AXIS_LABELS[hoursAxis],
       start: start.toISOString(),
       end: end.toISOString(),
-      summary,
+      summary: {
+        ...summary,
+        avg_hours_to_callback_filtered: axisAvg
+      },
       total,
       duration_seconds: durationSeconds,
       limit: parsedLimit,
