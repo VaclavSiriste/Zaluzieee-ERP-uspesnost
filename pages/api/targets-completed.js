@@ -59,6 +59,7 @@ export default async function handler(req, res) {
       end: endDate,
       source: completed.source,
       completed: {
+        total: completed.total,
         technicians: completed.technicians,
         regions: completed.regions
       },
@@ -67,6 +68,7 @@ export default async function handler(req, res) {
         regions_by_name: completed.regions_by_name
       },
       totals: {
+        all: completed.total,
         technicians: Object.values(completed.technicians).reduce((sum, n) => sum + Number(n || 0), 0),
         regions: Object.values(completed.regions).reduce((sum, n) => sum + Number(n || 0), 0)
       }

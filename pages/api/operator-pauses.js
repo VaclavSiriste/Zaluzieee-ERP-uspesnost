@@ -23,6 +23,10 @@ import {
   computeTotalRequests
 } from '@/lib/operator-requests-metrics'
 import { PAUSE_DISPLAY_NAME_SQL } from '@/lib/pause-labels'
+import {
+  REJECTED_BY_CUSTOMER_SQL,
+  REJECTED_BY_OPERATOR_SQL
+} from '@/lib/rejected-call-sql'
 import fs from 'fs/promises'
 import path from 'path'
 
@@ -231,6 +235,14 @@ export default async function handler(req, res) {
           COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'OUT')::int AS outgoing_calls,
           COUNT(*) FILTER (WHERE UPPER(COALESCE(c.direction, '')) = 'IN')::int AS incoming_calls,
           COUNT(*) FILTER (WHERE c.answered = false)::int AS rejected_calls,
+          COUNT(*) FILTER (
+            WHERE c.answered = false
+              AND (${REJECTED_BY_OPERATOR_SQL})
+          )::int AS rejected_by_operator,
+          COUNT(*) FILTER (
+            WHERE c.answered = false
+              AND (${REJECTED_BY_CUSTOMER_SQL})
+          )::int AS rejected_by_customer,
           -- Průměr včetně 0 → O×P (= počet všech × průměr) = skutečný součet dob
           AVG(COALESCE(c.duration, 0)) FILTER (
             WHERE UPPER(COALESCE(c.direction, '')) = 'OUT'
@@ -283,6 +295,8 @@ export default async function handler(req, res) {
         COALESCE(c.outgoing_calls, 0)::int AS outgoing_calls,
         COALESCE(c.incoming_calls, 0)::int AS incoming_calls,
         COALESCE(c.rejected_calls, 0)::int AS rejected_calls,
+        COALESCE(c.rejected_by_operator, 0)::int AS rejected_by_operator,
+        COALESCE(c.rejected_by_customer, 0)::int AS rejected_by_customer,
         COALESCE(c.outgoing_avg_seconds, 0)::float8 AS outgoing_avg_seconds,
         COALESCE(c.incoming_avg_seconds, 0)::float8 AS incoming_avg_seconds,
         COALESCE(c.outgoing_duration_seconds_sum, 0)::bigint AS outgoing_duration_seconds_sum,
@@ -489,6 +503,8 @@ export default async function handler(req, res) {
           incoming_duration_seconds_sum: Number(row.incoming_duration_seconds_sum) || 0,
           total_calls: totalCalls,
           rejected_calls: Number(row.rejected_calls) || 0,
+          rejected_by_operator: Number(row.rejected_by_operator) || 0,
+          rejected_by_customer: Number(row.rejected_by_customer) || 0,
           email_count: emailCount,
           email_avg_seconds: Number(row.email_avg_seconds) || 0,
           email_wait_seconds_sum: Number(row.email_wait_seconds_sum) || 0,

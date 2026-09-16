@@ -15,7 +15,7 @@ import {
   writeTargetsView
 } from '@/lib/targets-storage'
 import { syncTargetsCompletedFromErp } from '@/lib/sync-targets-completed'
-import { sortTechnicians } from '@/lib/technician-targets'
+import { sortTechnicians, technicianId } from '@/lib/technician-targets'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 
 function formatNumber(value) {
@@ -99,7 +99,8 @@ function BreakdownList({ title, rows, values, completed, helpId }) {
 export default function OperationsTargetsPanel({
   brandId = 'cz',
   organizationId = null,
-  brandLabel = 'zaluzieee - CZ'
+  brandLabel = 'zaluzieee - CZ',
+  sheetTechnicians = null
 }) {
   const targetsBrandId = brandId
   const [monthKey, setMonthKey] = useState('')
@@ -109,6 +110,46 @@ export default function OperationsTargetsPanel({
   const [erpSyncing, setErpSyncing] = useState(false)
 
   const monthOptions = useMemo(() => listMonthOptions(), [])
+
+  /** OVT sheet (pokladamee): jména techniků ze sloupce Q → katalog targetů */
+  useEffect(() => {
+    if (!Array.isArray(sheetTechnicians) || !sheetTechnicians.length || !monthKey) return
+    const incoming = sheetTechnicians
+      .map((item) => ({
+        id: item.id || technicianId(item.name),
+        name: String(item.name || '').trim()
+      }))
+      .filter((item) => item.id && item.name)
+    if (!incoming.length) return
+
+    setBucket((current) => {
+      if (!current?.technicians) return current
+      const byId = new Map((current.technicians.catalog || []).map((item) => [item.id, item]))
+      let changed = false
+      for (const tech of incoming) {
+        if (!byId.has(tech.id)) {
+          byId.set(tech.id, tech)
+          changed = true
+        }
+      }
+      if (!changed) return current
+
+      const catalog = sortTechnicians(Array.from(byId.values()))
+      const activeIds = Array.from(
+        new Set([...(current.technicians.activeIds || []), ...incoming.map((item) => item.id)])
+      )
+      const next = {
+        ...current,
+        technicians: {
+          ...current.technicians,
+          catalog,
+          activeIds
+        }
+      }
+      writeMonthBucket(monthKey, next, targetsBrandId)
+      return next
+    })
+  }, [sheetTechnicians, monthKey, targetsBrandId])
 
   async function reloadBucket(key = monthKey, syncErp = false) {
     if (!key) return
@@ -185,19 +226,12 @@ export default function OperationsTargetsPanel({
     return (techSum || 0) + (regionSum || 0)
   }, [techRows, regionRows, tech?.values, regions?.values])
 
-  const breakdownCompleted = useMemo(() => {
-    const techSum = sumRows(techRows, tech?.completed || {})
-    const regionSum = sumRows(regionRows, regions?.completed || {})
-    if (techSum == null && regionSum == null) return null
-    return (techSum || 0) + (regionSum || 0)
-  }, [techRows, regionRows, tech?.completed, regions?.completed])
-
+  // Cíl: ruční „Cíl celkem“, jinak součet cílů z rozpadu
   const displayTarget =
     String(operations?.target || '').trim() ||
     (breakdownTarget != null ? String(breakdownTarget) : '')
-  const displayCompleted =
-    String(operations?.completed || '').trim() ||
-    (breakdownCompleted != null ? String(breakdownCompleted) : '')
+  // Splněno celkem: jen ERP počet zakázek s datum_zamereni v měsíci (ne součet techniků/krajů)
+  const displayCompleted = String(operations?.completed || '').trim()
 
   const summaryPct = computeProgressPct(displayTarget, displayCompleted)
   const targetFillPct = computeProgressPct(displayTarget, displayCompleted) ?? 0
@@ -227,9 +261,9 @@ export default function OperationsTargetsPanel({
       </h2>
       <p className="sla-block-desc">
         {expanded
-          ? `Nastavte celkový cíl a splnění pro ${brandLabel}. Splněno techniků/krajů se počítá z ERP (datum zaměření${
-              organizationId != null ? `, organizace č. ${organizationId}` : ''
-            }).`
+          ? `Cíl zadáte ručně. Splněno = počet naplánovaných zaměření (datum_zamereni) v měsíci z ERP${
+              organizationId != null ? ` · organizace č. ${organizationId}` : ''
+            }.`
           : 'Klikněte pro rozpad targetů — kraje a technici.'}
         {erpSyncing ? ' · Načítám splněno z ERP…' : ''}
       </p>
@@ -333,7 +367,7 @@ export default function OperationsTargetsPanel({
                 fillPct={completedFillPct}
                 badge="Splněno"
                 tone="completed"
-                onChange={(event) => persistOperations({ completed: event.target.value })}
+                readOnly
               />
             </label>
           </div>

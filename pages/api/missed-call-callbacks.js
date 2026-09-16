@@ -6,9 +6,10 @@
 import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
 import { lookupOrdersByPhoneKeys, phoneKeyFromClid } from '@/lib/erp-phone-orders'
 import {
-  MISSED_CALLBACK_CTE,
+  buildMissedCallbackCte,
   missedCallbackVariantFilter
 } from '@/lib/missed-call-callback-sql'
+import { resolveOperationsBrand } from '@/lib/operations-brands'
 import { resolveDateRange } from '@/lib/metrics-query'
 import fs from 'fs/promises'
 import path from 'path'
@@ -116,6 +117,8 @@ export default async function handler(req, res) {
   const period = typeof req.query.period === 'string' ? req.query.period : 'month'
   const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : ''
   const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : ''
+  const brandRaw = cleanParam(req.query.brand).toLowerCase()
+  const brand = brandRaw && resolveOperationsBrand(brandRaw) ? brandRaw : null
   const variantRaw = cleanParam(req.query.variant).toLowerCase() || 'all'
   const variant = VARIANT_LABELS[variantRaw] ? variantRaw : 'all'
   const summaryOnly = req.query.summary === '1' || req.query.summary === 'true'
@@ -129,6 +132,7 @@ export default async function handler(req, res) {
     const { start, end } = resolveDateRange({ startDate, endDate, period })
     const params = [start, end]
     const variantFilter = missedCallbackVariantFilter(variant)
+    const MISSED_CALLBACK_CTE = buildMissedCallbackCte({ brandId: brand })
 
     const summarySql = `
       WITH ${MISSED_CALLBACK_CTE}
@@ -156,6 +160,7 @@ export default async function handler(req, res) {
     if (summaryOnly) {
       const payload = {
         period,
+        brand,
         start: start.toISOString(),
         end: end.toISOString(),
         summary
@@ -208,6 +213,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       period,
+      brand,
       variant,
       label: VARIANT_LABELS[variant],
       start: start.toISOString(),

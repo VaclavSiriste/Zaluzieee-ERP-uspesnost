@@ -152,7 +152,9 @@ function buildQueryParams(drilldown, filters, offset, typeFilter = null) {
   if (isMissedCallbackMetric(metric)) {
     return new URLSearchParams({
       ...base,
-      variant: drilldown.missedVariant || 'all'
+      variant: drilldown.missedVariant || 'all',
+      ...(filters.brand ? { brand: filters.brand } : {}),
+      ...(drilldown.brand ? { brand: drilldown.brand } : {})
     })
   }
 
@@ -170,6 +172,9 @@ function emptyLabel(metric) {
   if (metric === 'emails') return 'Žádné maily v zvoleném období.'
   if (metric === 'rejected') return 'Žádné odmítnuté hovory v zvoleném období.'
   if (metric === 'activity') return 'Žádné hovory ani maily v zvoleném období.'
+  if (metric === 'rejected' || metric === 'rejected_operator' || metric === 'rejected_customer') {
+    return 'Žádné odmítnuté hovory v zvoleném období.'
+  }
   if (metric === 'missed_callbacks') return 'Žádné zmeškané příchozí hovory v zvoleném období.'
   return 'Žádné hovory v zvoleném období.'
 }

@@ -5,8 +5,9 @@ import DrilldownCount from '@/components/DrilldownCount'
 import ErpNavolaniDrilldown from '@/components/ErpNavolaniDrilldown'
 import FilterAssistant from '@/components/FilterAssistant'
 import IncomingLineSlaDrilldown from '@/components/IncomingLineSlaDrilldown'
-import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
+import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
+import PauseDrilldown from '@/components/PauseDrilldown'
 import { OPERATIONS_BRANDS } from '@/lib/operations-brands'
 
 function formatPercent(value) {
@@ -22,6 +23,32 @@ function formatSeconds(value) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1
   })} s`
+}
+
+function formatHours(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  const hours = Number(value)
+  if (hours < 1) {
+    const minutes = Math.round(hours * 60)
+    return minutes > 0 ? `${minutes} min` : '< 1 min'
+  }
+  if (hours >= 48) {
+    const days = Math.floor(hours / 24)
+    const rest = Math.round(hours % 24)
+    return rest > 0 ? `${days} d ${rest} h` : `${days} d`
+  }
+  return `${hours.toLocaleString('cs-CZ', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
+  })} h`
+}
+
+function formatNumber(value, digits = 0) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return Number(value).toLocaleString('cs-CZ', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits
+  })
 }
 
 function formatFilterRange(startDate, endDate) {
@@ -100,7 +127,7 @@ function buildBreakdownItems(metrics) {
 export default function OperationsBrandPage({ brandId = 'cz' }) {
   const brand = OPERATIONS_BRANDS[brandId] || OPERATIONS_BRANDS.cz
   const showTargets = brand.showTargets === true
-  const navolaniConfigured = brand.organizationId != null
+  const navolaniConfigured = brand.organizationId != null || brand.navolaniSource === 'ovt-sheet'
 
   const [period, setPeriod] = useState('month')
   const [startDate, setStartDate] = useState('')
@@ -108,14 +135,21 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [metrics, setMetrics] = useState(null)
   const [slaFilterRange, setSlaFilterRange] = useState(null)
   const [navolaniMetrics, setNavolaniMetrics] = useState(null)
+  const [navolaniSource, setNavolaniSource] = useState('erp-db')
+  const [sheetTechnicians, setSheetTechnicians] = useState([])
   const [loading, setLoading] = useState(true)
   const [navolaniLoading, setNavolaniLoading] = useState(true)
   const [error, setError] = useState('')
   const [navolaniError, setNavolaniError] = useState('')
   const [breakdownOpen, setBreakdownOpen] = useState(false)
   const [navolaniOpen, setNavolaniOpen] = useState(false)
+  const [callbackOpen, setCallbackOpen] = useState(false)
   const [drilldown, setDrilldown] = useState(null)
   const [navolaniDrilldown, setNavolaniDrilldown] = useState(null)
+  const [callbackDrilldown, setCallbackDrilldown] = useState(null)
+  const [callbackSummary, setCallbackSummary] = useState(null)
+  const [callbackLoading, setCallbackLoading] = useState(true)
+  const [callbackError, setCallbackError] = useState('')
 
   const filters = useMemo(
     () => ({
@@ -140,11 +174,13 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   useEffect(() => {
     fetchData()
     fetchNavolaniData()
+    fetchCallbackData()
   }, [period, startDate, endDate, brand.id])
 
   useEffect(() => {
     setBreakdownOpen(false)
     setNavolaniOpen(false)
+    setCallbackOpen(false)
   }, [period, startDate, endDate, brand.id])
 
   async function fetchData() {
@@ -183,10 +219,12 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   }
 
   async function fetchNavolaniData() {
-    if (!navolaniConfigured) {
+    if (!navolaniConfigured && brand.navolaniSource !== 'ovt-sheet') {
       setNavolaniMetrics(null)
       setNavolaniError('')
       setNavolaniLoading(false)
+      setNavolaniSource('erp-db')
+      setSheetTechnicians([])
       return
     }
 
@@ -206,6 +244,8 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
       const data = await response.json()
       if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
       setNavolaniMetrics(data.metrics || null)
+      setNavolaniSource(data.source || 'erp-db')
+      setSheetTechnicians(Array.isArray(data.technicians) ? data.technicians : [])
     } catch (err) {
       if (err.name === 'AbortError') {
         setNavolaniError('Načítání úspěšnosti navolání trvalo příliš dlouho.')
@@ -213,8 +253,42 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
         setNavolaniError(err.message || 'Nepodařilo se načíst úspěšnost navolání')
       }
       setNavolaniMetrics(null)
+      setNavolaniSource('erp-db')
+      setSheetTechnicians([])
     } finally {
       setNavolaniLoading(false)
+    }
+  }
+
+  async function fetchCallbackData() {
+    setCallbackLoading(true)
+    setCallbackError('')
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 90000)
+      const params = new URLSearchParams({
+        period,
+        brand: brand.id,
+        summary: '1',
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {})
+      })
+      const response = await fetch(`/api/missed-call-callbacks?${params}`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      const data = await response.json()
+      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+      setCallbackSummary(data.summary || null)
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setCallbackError('Načítání doby do navolání trvalo příliš dlouho.')
+      } else {
+        setCallbackError(err.message || 'Nepodařilo se načíst dobu do navolání zmeškaných')
+      }
+      setCallbackSummary(null)
+    } finally {
+      setCallbackLoading(false)
     }
   }
 
@@ -234,6 +308,16 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     setNavolaniDrilldown({ metric, title, operatorName, brand: brand.id })
   }
 
+  function openCallbackDrilldown(variant, title, subtitle) {
+    setCallbackDrilldown({
+      metric: 'missed_callbacks',
+      missedVariant: variant,
+      brand: brand.id,
+      title,
+      subtitle
+    })
+  }
+
   return (
     <main className="dashboard-container sla-page">
       <div className="dashboard-layout">
@@ -244,8 +328,14 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               <p className="sla-kicker">Provoz · Daktela + ERP reporting</p>
               <h1>{brand.pageTitle}</h1>
               <p className="sla-hero-lead">
-                SLA příchozích linek ({brand.slaLineHint}), úspěšnost navolání z ERP
-                {navolaniConfigured ? ` (organizace č. ${brand.organizationId})` : ''}
+                SLA příchozích linek ({brand.slaLineHint}), průměrná doba do navolání zmeškaných,
+                {brand.navolaniSource === 'ovt-sheet'
+                  ? ' úspěšnost navolání z OVT sheetu (gid 1262379590)'
+                  : ` úspěšnost navolání z ERP${
+                      navolaniConfigured && brand.organizationId != null
+                        ? ` (organizace č. ${brand.organizationId})`
+                        : ''
+                    }`}
                 {showTargets ? ' a targety provozu' : ''}. Rozbalte blok pro rozpad.
               </p>
             </div>
@@ -269,7 +359,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             metricHelpId="filter_obdobi"
           />
 
-          {loading && navolaniLoading ? (
+          {loading && navolaniLoading && callbackLoading ? (
             <div className="sla-loading">
               <span className="pauses-spinner" />
               Načítám metriky provozu…
@@ -279,6 +369,12 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
           {error ? (
             <section className="sla-error">
               <p className="danger">SLA: {error}</p>
+            </section>
+          ) : null}
+
+          {callbackError ? (
+            <section className="sla-error">
+              <p className="danger">Doba do navolání: {callbackError}</p>
             </section>
           ) : null}
 
@@ -423,14 +519,103 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             </section>
           ) : null}
 
+          {!callbackLoading && !callbackError && callbackSummary ? (
+            <section className={`sla-block sla-block-nested sla-block-callback${callbackOpen ? ' is-expanded' : ''}`}>
+              <h2 className="sla-block-title">
+                Průměrná doba do navolání zmeškaných
+                <MetricInfoTip helpId="missed_callback_avg" />
+              </h2>
+              <p className="sla-block-desc">
+                Zmeškaný příchozí hovor (nezvednutý) → první odchozí zpět na stejné číslo.
+                Fronty {brand.pageTitle}. Období jako u filtru.
+              </p>
+
+              <button
+                type="button"
+                className={`sla-kpi-root sla-kpi-root-callback${callbackOpen ? ' is-open' : ''}`}
+                onClick={() => setCallbackOpen((open) => !open)}
+                aria-expanded={callbackOpen}
+              >
+                <MetricLabel helpId="missed_callback_avg" className="sla-kpi-label">
+                  Průměrná doba do navolání
+                </MetricLabel>
+                <strong className="sla-kpi-value">
+                  {formatHours(callbackSummary.avg_hours_to_callback)}
+                </strong>
+                <span className="sla-kpi-hint">
+                  {formatNumber(callbackSummary.called_back)} navoláno z{' '}
+                  {formatNumber(callbackSummary.total_missed)} zmeškaných
+                </span>
+                <span className="sla-kpi-root-toggle">
+                  {callbackOpen ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}
+                </span>
+              </button>
+
+              {callbackOpen ? (
+                <div className="sla-kpi-breakdown" aria-label="Rozpad zmeškaných hovorů">
+                  <article className="sla-kpi sla-kpi-child">
+                    <span className="sla-kpi-label">Zmeškané příchozí</span>
+                    <DrilldownCount
+                      count={callbackSummary.total_missed}
+                      className="sla-kpi-value"
+                      title="Kliknutím zobrazíte výčet zmeškaných hovorů"
+                      onOpen={() =>
+                        openCallbackDrilldown(
+                          'all',
+                          `${brand.pageTitle} — Zmeškané příchozí`,
+                          'Příchozí hovory (answered = Ne) · shoda s navoláním přes posledních 9 číslic'
+                        )
+                      }
+                    />
+                  </article>
+                  <article className="sla-kpi sla-kpi-child">
+                    <MetricLabel helpId="missed_callback_avg">Průměr do navolání</MetricLabel>
+                    <DrilldownCount
+                      count={callbackSummary.called_back}
+                      text={formatHours(callbackSummary.avg_hours_to_callback)}
+                      className="sla-kpi-value"
+                      title="Kliknutím zobrazíte navolané zmeškané hovory"
+                      onOpen={() =>
+                        openCallbackDrilldown(
+                          'called_back',
+                          `${brand.pageTitle} — Navolané zmeškané`,
+                          'První odchozí hovor na stejné číslo po zmeškání'
+                        )
+                      }
+                    />
+                    <span className="sla-kpi-hint">
+                      {formatNumber(callbackSummary.called_back)} navoláno
+                    </span>
+                  </article>
+                  <article className="sla-kpi sla-kpi-child">
+                    <span className="sla-kpi-label">Ještě nenavolané</span>
+                    <DrilldownCount
+                      count={callbackSummary.not_called_back}
+                      className="sla-kpi-value"
+                      title="Kliknutím zobrazíte nenavolané zmeškané hovory"
+                      onOpen={() =>
+                        openCallbackDrilldown(
+                          'open',
+                          `${brand.pageTitle} — Nenavolané zmeškané`,
+                          'Zmeškané příchozí bez následného odchozího hovoru na stejné číslo'
+                        )
+                      }
+                    />
+                  </article>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           {navolaniConfigured && !navolaniLoading && !navolaniError && navolaniMetrics ? (
             <CallSuccessNavolaniPanel
               metrics={navolaniMetrics}
               expanded={navolaniOpen}
               onToggle={() => setNavolaniOpen((open) => !open)}
-              onOpenMetric={openNavolaniMetric}
+              onOpenMetric={navolaniSource === 'pokladamee-ovt-sheet' ? null : openNavolaniMetric}
               navolaniHint={brand.navolaniHint}
               organizationId={brand.organizationId}
+              source={navolaniSource}
             />
           ) : null}
 
@@ -439,6 +624,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               brandId={brand.targetsBrandId || brand.id}
               organizationId={brand.organizationId}
               brandLabel={brand.pageTitle}
+              sheetTechnicians={brand.navolaniSource === 'ovt-sheet' ? sheetTechnicians : null}
             />
           ) : null}
         </div>
@@ -455,6 +641,13 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
         open={Boolean(navolaniDrilldown)}
         onClose={() => setNavolaniDrilldown(null)}
         drilldown={navolaniDrilldown}
+        filters={filters}
+      />
+
+      <PauseDrilldown
+        open={Boolean(callbackDrilldown)}
+        onClose={() => setCallbackDrilldown(null)}
+        drilldown={callbackDrilldown}
         filters={filters}
       />
     </main>

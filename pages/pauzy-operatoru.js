@@ -139,6 +139,7 @@ export default function OperatorPausesPage() {
   const [syncBusy, setSyncBusy] = useState(false)
   const [missedCallbackSummary, setMissedCallbackSummary] = useState(null)
   const [missedCallbackLoading, setMissedCallbackLoading] = useState(false)
+  const [rejectedExpandedIds, setRejectedExpandedIds] = useState(() => new Set())
 
   const filters = useMemo(
     () => ({
@@ -440,15 +441,35 @@ export default function OperatorPausesPage() {
   }, [visibleSummaryRows])
 
   const visibleTotals = useMemo(() => {
+    let natrasovaniAno = 0
+    let natrasovaniPocet = 0
+    let zamereniAno = 0
+    let zamereniPocet = 0
+
+    for (const row of visibleSummaryRows) {
+      natrasovaniAno += Number(row.domluveno_zamereni_ano) || 0
+      natrasovaniPocet += Number(row.domluveno_zamereni_pocet) || 0
+      zamereniAno += Number(row.erp_hovory_ano) || 0
+      zamereniPocet += Number(row.erp_hovory_pocet) || 0
+    }
+
     return {
       operators: visibleBubbles.length,
       sessions: visibleBubbles.reduce((sum, bubble) => sum + (Number(bubble.sessions) || 0), 0),
       duration_seconds: visibleBubbles.reduce(
         (sum, bubble) => sum + (Number(bubble.duration_seconds) || 0),
         0
-      )
+      ),
+      // Vážený souhrn přes viditelné operátory (číselník + tým), ne průměr %
+      success_natrasovani_pct:
+        natrasovaniPocet > 0 ? (natrasovaniAno / natrasovaniPocet) * 100 : null,
+      natrasovani_ano: natrasovaniAno,
+      natrasovani_pocet: natrasovaniPocet,
+      success_zamereni_z_erp_pct: zamereniPocet > 0 ? (zamereniAno / zamereniPocet) * 100 : null,
+      zamereni_ano: zamereniAno,
+      zamereni_pocet: zamereniPocet
     }
-  }, [visibleBubbles])
+  }, [visibleBubbles, visibleSummaryRows])
 
   const activeIds = useMemo(
     () => bubbles.map((bubble) => String(bubble.operator_id)),
@@ -508,6 +529,16 @@ export default function OperatorPausesPage() {
       title: `${bubble.operator_name} — ${title}`,
       subtitle,
       ...options
+    })
+  }
+
+  function toggleRejectedBreakdown(operatorId) {
+    const id = String(operatorId)
+    setRejectedExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
   }
 
@@ -772,6 +803,34 @@ export default function OperatorPausesPage() {
                   }
                 />
               </article>
+              <article
+                className="pauses-kpi"
+                title="ERP · Naplánován termín zaměření ANO / (ANO + NE) · součet přes viditelné operátory"
+              >
+                <span className="pauses-kpi-label">Úspěšnost natrasování</span>
+                <strong className="pauses-kpi-value">
+                  {formatPercent(visibleTotals.success_natrasovani_pct)}
+                </strong>
+                <span className="pauses-kpi-hint">
+                  {visibleTotals.natrasovani_pocet > 0
+                    ? `${formatNumber(visibleTotals.natrasovani_ano, 0)} ANO / ${formatNumber(visibleTotals.natrasovani_pocet, 0)}`
+                    : 'bez ERP dat'}
+                </span>
+              </article>
+              <article
+                className="pauses-kpi"
+                title="ANO / ERP hovory · součet přes viditelné operátory"
+              >
+                <span className="pauses-kpi-label">Úspěšnost zaměření</span>
+                <strong className="pauses-kpi-value">
+                  {formatPercent(visibleTotals.success_zamereni_z_erp_pct)}
+                </strong>
+                <span className="pauses-kpi-hint">
+                  {visibleTotals.zamereni_pocet > 0
+                    ? `${formatNumber(visibleTotals.zamereni_ano, 0)} ANO / ${formatNumber(visibleTotals.zamereni_pocet, 0)}`
+                    : 'bez ERP dat'}
+                </span>
+              </article>
               {(missedCallbackLoading || missedCallbackSummary) ? (
                 <>
                   <article className="pauses-kpi pauses-kpi-clickable">
@@ -957,23 +1016,64 @@ export default function OperatorPausesPage() {
                         <strong>{formatDuration(summary.idle_seconds)}</strong>
                         <small>rozkliknout pauzy</small>
                       </button>
-                      <button
-                        type="button"
-                        className="pauses-summary-item pauses-summary-clickable"
-                        disabled={!summary.rejected_calls}
-                        onClick={() =>
-                          openMetricDrilldown(
-                            bubble,
-                            'rejected',
-                            'Odmítnuté hovory',
-                            'Nezvednuté / zmeškané hovory (answered = Ne) v Daktela'
-                          )
-                        }
-                      >
-                        <span>Odmítnuté hovory</span>
-                        <strong>{formatNumber(summary.rejected_calls, 0)}</strong>
-                        <small>rozkliknout seznam</small>
-                      </button>
+                      <div className="pauses-rejected-block">
+                        <button
+                          type="button"
+                          className={`pauses-summary-item pauses-summary-clickable${
+                            rejectedExpandedIds.has(String(bubble.operator_id)) ? ' is-open' : ''
+                          }`}
+                          disabled={!summary.rejected_calls}
+                          onClick={() => toggleRejectedBreakdown(bubble.operator_id)}
+                          aria-expanded={rejectedExpandedIds.has(String(bubble.operator_id))}
+                          title="Rozklikněte rozpad: operátor vs zákazník"
+                        >
+                          <span>Odmítnuté hovory</span>
+                          <strong>{formatNumber(summary.rejected_calls, 0)}</strong>
+                          <small>
+                            {rejectedExpandedIds.has(String(bubble.operator_id))
+                              ? 'skrýt rozpad ▴'
+                              : 'rozkliknout rozpad ▾'}
+                          </small>
+                        </button>
+                        {rejectedExpandedIds.has(String(bubble.operator_id)) ? (
+                          <div className="pauses-rejected-breakdown" aria-label="Rozpad odmítnutých hovorů">
+                            <button
+                              type="button"
+                              className="pauses-summary-item pauses-summary-clickable pauses-rejected-child"
+                              disabled={!summary.rejected_by_operator}
+                              onClick={() =>
+                                openMetricDrilldown(
+                                  bubble,
+                                  'rejected_operator',
+                                  'Odmítnuté operátorem',
+                                  'Daktela · answered = Ne · disposition_cause = agent · cancel/abandon'
+                                )
+                              }
+                            >
+                              <span>Odmítnuté operátorem</span>
+                              <strong>{formatNumber(summary.rejected_by_operator, 0)}</strong>
+                              <small>rozkliknout seznam</small>
+                            </button>
+                            <button
+                              type="button"
+                              className="pauses-summary-item pauses-summary-clickable pauses-rejected-child"
+                              disabled={!summary.rejected_by_customer}
+                              onClick={() =>
+                                openMetricDrilldown(
+                                  bubble,
+                                  'rejected_customer',
+                                  'Odmítnuté zákazníkem',
+                                  'Daktela · answered = Ne · caller / busy / noanswer / failed'
+                                )
+                              }
+                            >
+                              <span>Odmítnuté zákazníkem</span>
+                              <strong>{formatNumber(summary.rejected_by_customer, 0)}</strong>
+                              <small>rozkliknout seznam</small>
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                       <button
                         type="button"
                         className="pauses-summary-item pauses-summary-clickable"

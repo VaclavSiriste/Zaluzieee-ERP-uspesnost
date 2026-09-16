@@ -49,11 +49,32 @@ export default function CallSuccessNavolaniPanel({
   onToggle,
   onOpenMetric,
   navolaniHint = 'ERP · termín zaměření ANO / dopadl hovor ANO',
-  organizationId = null
+  organizationId = null,
+  source = 'erp-db'
 }) {
   if (!metrics) return null
 
-  const breakdownItems = buildBreakdownItems(metrics)
+  const fromSheet = source === 'pokladamee-ovt-sheet' || metrics.source === 'pokladamee-ovt-sheet'
+  const breakdownItems = fromSheet
+    ? [
+        {
+          metric: 'dopadl_hovor_ano',
+          title: 'Dopadl hovor ANO',
+          label: 'Dopadl hovor ANO',
+          helpId: 'navolani_dopadl_ano',
+          count: metrics.dopadl_hovor_ano,
+          hint: 'Čitatel úspěšnosti (sloupec L)'
+        },
+        {
+          metric: 'dopadl_hovor_pocet',
+          title: 'Celkem řádků v období',
+          label: 'Celkem (filtr K)',
+          helpId: 'navolani_celkem',
+          count: metrics.dopadl_hovor_pocet,
+          hint: 'Jmenovatel · datum navolání ve filtru'
+        }
+      ]
+    : buildBreakdownItems(metrics)
   const pct = metrics.success_navolani_pct
 
   return (
@@ -64,10 +85,12 @@ export default function CallSuccessNavolaniPanel({
       </h2>
       <p className="sla-block-desc">
         {expanded
-          ? `${navolaniHint}. Klikněte pro seznam zakázek.`
-          : organizationId != null
-            ? `Organizace č. ${organizationId} · klikněte pro rozpad — data z ERP, ne z Daktely.`
-            : 'Klikněte pro rozpad — data z ERP, ne z Daktely.'}
+          ? `${navolaniHint}${fromSheet ? '' : '. Klikněte pro seznam zakázek.'}`
+          : fromSheet
+            ? 'Google Sheet OVT · klikněte pro rozpad — Dopadl hovor ANO / počet řádků dle data navolání.'
+            : organizationId != null
+              ? `Organizace č. ${organizationId} · klikněte pro rozpad — data z ERP, ne z Daktely.`
+              : 'Klikněte pro rozpad — data z ERP, ne z Daktely.'}
       </p>
 
       <button
@@ -81,8 +104,9 @@ export default function CallSuccessNavolaniPanel({
         </MetricLabel>
         <strong className="sla-kpi-value">{formatPercent(pct)}</strong>
         <span className="sla-kpi-hint">
-          {metrics.domluveno_zamereni_ano.toLocaleString('cs-CZ')} termín ANO /{' '}
-          {metrics.dopadl_hovor_ano.toLocaleString('cs-CZ')} dopadl hovor ANO
+          {fromSheet
+            ? `${Number(metrics.dopadl_hovor_ano || 0).toLocaleString('cs-CZ')} ANO / ${Number(metrics.dopadl_hovor_pocet || 0).toLocaleString('cs-CZ')} celkem`
+            : `${Number(metrics.domluveno_zamereni_ano || 0).toLocaleString('cs-CZ')} termín ANO / ${Number(metrics.dopadl_hovor_ano || 0).toLocaleString('cs-CZ')} dopadl hovor ANO`}
         </span>
         <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
       </button>
@@ -93,18 +117,24 @@ export default function CallSuccessNavolaniPanel({
             {breakdownItems.map((item) => (
               <article key={item.metric} className="sla-kpi sla-kpi-child">
                 <MetricLabel helpId={item.helpId}>{item.label}</MetricLabel>
-                <DrilldownCount
-                  count={item.count}
-                  className="sla-kpi-value"
-                  title={`Kliknutím zobrazíte záznamy: ${item.title}`}
-                  onOpen={() => onOpenMetric(item.metric, item.title)}
-                />
+                {fromSheet || !onOpenMetric ? (
+                  <strong className="sla-kpi-value">
+                    {Number(item.count || 0).toLocaleString('cs-CZ')}
+                  </strong>
+                ) : (
+                  <DrilldownCount
+                    count={item.count}
+                    className="sla-kpi-value"
+                    title={`Kliknutím zobrazíte záznamy: ${item.title}`}
+                    onOpen={() => onOpenMetric(item.metric, item.title)}
+                  />
+                )}
                 {item.hint ? <span className="sla-kpi-hint">{item.hint}</span> : null}
               </article>
             ))}
           </div>
 
-          {metrics.by_operator?.length ? (
+          {!fromSheet && metrics.by_operator?.length ? (
             <div className="navolani-operator-breakdown" aria-label="Rozpad podle operátorů">
               <h3 className="navolani-operator-title">
                 Podle operátora

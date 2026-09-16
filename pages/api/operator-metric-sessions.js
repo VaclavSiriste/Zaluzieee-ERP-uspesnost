@@ -5,6 +5,7 @@
 
 import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
 import { resolveDateRange } from '@/lib/metrics-query'
+import { rejectedByFilterSql } from '@/lib/rejected-call-sql'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
@@ -48,6 +49,8 @@ const METRIC_LABELS = {
   incoming: 'Příchozí hovory',
   calls: 'Hovory',
   rejected: 'Odmítnuté hovory',
+  rejected_operator: 'Odmítnuté operátorem',
+  rejected_customer: 'Odmítnuté zákazníkem',
   emails: 'Maily',
   activity: 'Požadavky (hovory + maily)'
 }
@@ -330,7 +333,15 @@ export default async function handler(req, res) {
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `
       mapRow = (row) => (row.kind === 'email' ? mapEmailRow(row) : mapCallRow(row))
-    } else if (metric === 'rejected') {
+    } else if (metric === 'rejected' || metric === 'rejected_operator' || metric === 'rejected_customer') {
+      const rejectedBy =
+        metric === 'rejected_operator'
+          ? 'operator'
+          : metric === 'rejected_customer'
+            ? 'customer'
+            : cleanParam(req.query.rejectedBy).toLowerCase() || 'all'
+      const rejectedFilter = rejectedByFilterSql(rejectedBy)
+
       countSql = `
         SELECT COUNT(*)::int AS total,
                COALESCE(SUM(COALESCE(NULLIF(c.duration, 0), 0)), 0)::bigint AS duration_seconds
@@ -338,6 +349,7 @@ export default async function handler(req, res) {
         WHERE c.call_time >= $1
           AND c.call_time <= $2
           AND c.answered = false
+          ${rejectedFilter}
           ${operator ? `AND c."user" = $3` : ''}
       `
       listSql = `
@@ -359,6 +371,7 @@ export default async function handler(req, res) {
         WHERE c.call_time >= $1
           AND c.call_time <= $2
           AND c.answered = false
+          ${rejectedFilter}
           ${operator ? `AND c."user" = $3` : ''}
         ORDER BY c.call_time DESC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
