@@ -30,16 +30,16 @@ export default function VycetSlaPanel({
     <section className={`sla-block sla-block-nested sla-block-vycet-sla${expanded ? ' is-expanded' : ''}`}>
       <h2 className="sla-block-title">
         Výčet SLA
-        <MetricInfoTip helpId="vycet_sla_celkem" />
+        <MetricInfoTip helpId="vycet_sla_24" />
       </h2>
       <p className="sla-block-desc">
         {expanded
           ? isSheet
-            ? `${orgHint}. Filtr období na datum přijetí (B). Navoláno = K stejný den jako B. SLA 24·48·72 = K do N hodin.`
-            : `${orgHint}. Business den 20:00–19:59 · kalendářní SLA 24 / 48 / 72 h. Klikněte na číslo pro seznam leadů.`
+            ? `${orgHint}. Primárně SLA 24. Filtr na datum přijetí (B). Rozpad: poptávky, SLA 48/72, navolání stejný den.`
+            : `${orgHint}. Primárně SLA 24 h. Business den 20:00–19:59 · SLA 48 / 72 v rozpadu. Klikněte na číslo pro seznam leadů.`
           : isSheet
-            ? `${orgHint}. Přišlo / navoláno a SLA 24·48·72 dle filtru období (datum přijetí B).`
-            : `${orgHint}. Přišlo / navoláno a SLA 24·48·72 dle filtru období.`}
+            ? `${orgHint}. SLA 24 dle filtru (B) · rozbalte pro poptávky, 48/72 a navolání.`
+            : `${orgHint}. SLA 24 dle filtru období · rozbalte pro ostatní metriky.`}
       </p>
 
       <button
@@ -48,66 +48,22 @@ export default function VycetSlaPanel({
         onClick={onToggle}
         aria-expanded={expanded}
       >
-        <MetricLabel helpId="vycet_sla_celkem" className="sla-kpi-label">
-          Splněno navolání (business den)
+        <MetricLabel helpId="vycet_sla_24" className="sla-kpi-label">
+          SLA 24
         </MetricLabel>
-        <strong className="sla-kpi-value">{formatPercent(metrics.fulfilled_pct)}</strong>
+        <strong className="sla-kpi-value">{formatPercent(metrics.sla24_pct)}</strong>
         <span className="sla-kpi-hint">
-          {Number(metrics.navolano || 0).toLocaleString('cs-CZ')} /{' '}
-          {Number(metrics.leads || 0).toLocaleString('cs-CZ')} leadů
+          {Number(metrics.sla24 || 0).toLocaleString('cs-CZ')} /{' '}
+          {Number(metrics.poptavky || 0).toLocaleString('cs-CZ')} poptávek
           {' · '}
-          SLA 24 {formatPercent(metrics.sla24_pct)}
+          Splněno navolání {formatPercent(metrics.fulfilled_pct)}
         </span>
         <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
       </button>
 
       {expanded ? (
         <div className="sla-breakdown-stack" aria-label="Rozpad Výčet SLA">
-          <div className="sla-kpi-breakdown" aria-label="Business den — přišlo a navoláno">
-            <article className="sla-kpi sla-kpi-child">
-              <MetricLabel helpId="vycet_sla_leads">Přišlo leadů</MetricLabel>
-              <DrilldownCount
-                count={metrics.leads}
-                className="sla-kpi-value"
-                onOpen={() => onOpenMetric('leads', 'Přišlo leadů')}
-              />
-              <span className="sla-kpi-hint">{isSheet ? 'filtr · datum přijetí (B)' : 'business den'}</span>
-            </article>
-            <article className="sla-kpi sla-kpi-child">
-              <MetricLabel helpId="vycet_sla_navolano">Dnes navoláno</MetricLabel>
-              <DrilldownCount
-                count={metrics.navolano}
-                className="sla-kpi-value"
-                onOpen={() => onOpenMetric('navolano', 'Dnes navoláno')}
-              />
-              <span className="sla-kpi-hint">{isSheet ? 'K = B (stejný den)' : 'stejný business den'}</span>
-            </article>
-            <article className="sla-kpi sla-kpi-child">
-              <MetricLabel helpId="vycet_sla_missing">Dnes chybí</MetricLabel>
-              <DrilldownCount
-                count={metrics.missing}
-                className="sla-kpi-value"
-                onOpen={() => onOpenMetric('missing', 'Dnes chybí')}
-              />
-              <span className="sla-kpi-hint">{isSheet ? 'přišlo − navoláno (stejný den)' : 'přišlo − navoláno'}</span>
-            </article>
-            <article className="sla-kpi sla-kpi-child sla-kpi-accent">
-              <MetricLabel helpId="vycet_sla_celkem">Splněno</MetricLabel>
-              <DrilldownCount
-                count={metrics.navolano}
-                text={formatPercent(metrics.fulfilled_pct)}
-                className="sla-kpi-value"
-                title="Kliknutím zobrazíte navolané leady"
-                onOpen={() => onOpenMetric('navolano', 'Splněno — navolané leady')}
-              />
-              <span className="sla-kpi-hint">
-                {Number(metrics.navolano || 0).toLocaleString('cs-CZ')} /{' '}
-                {Number(metrics.leads || 0).toLocaleString('cs-CZ')}
-              </span>
-            </article>
-          </div>
-
-          <div className="sla-kpi-breakdown" aria-label="Kalendářní den — poptávky a SLA">
+          <div className="sla-kpi-breakdown" aria-label="Poptávky a SLA">
             <article className="sla-kpi sla-kpi-child">
               <MetricLabel helpId="vycet_sla_poptavky">Poptávky</MetricLabel>
               <DrilldownCount
@@ -117,7 +73,7 @@ export default function VycetSlaPanel({
               />
               <span className="sla-kpi-hint">{isSheet ? 'filtr · datum přijetí (B)' : 'kalendářní den · +2 h'}</span>
             </article>
-            <article className="sla-kpi sla-kpi-child">
+            <article className="sla-kpi sla-kpi-child sla-kpi-accent">
               <MetricLabel helpId="vycet_sla_24">SLA 24</MetricLabel>
               <DrilldownCount
                 count={metrics.sla24}
@@ -161,6 +117,50 @@ export default function VycetSlaPanel({
                 title="Procento SLA 72"
                 onOpen={() => onOpenMetric('sla72', 'SLA 72 %')}
               />
+            </article>
+          </div>
+
+          <div className="sla-kpi-breakdown" aria-label="Navolání ve stejný den">
+            <article className="sla-kpi sla-kpi-child">
+              <MetricLabel helpId="vycet_sla_leads">Přišlo leadů</MetricLabel>
+              <DrilldownCount
+                count={metrics.leads}
+                className="sla-kpi-value"
+                onOpen={() => onOpenMetric('leads', 'Přišlo leadů')}
+              />
+              <span className="sla-kpi-hint">{isSheet ? 'filtr · datum přijetí (B)' : 'business den'}</span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <MetricLabel helpId="vycet_sla_navolano">Dnes navoláno</MetricLabel>
+              <DrilldownCount
+                count={metrics.navolano}
+                className="sla-kpi-value"
+                onOpen={() => onOpenMetric('navolano', 'Dnes navoláno')}
+              />
+              <span className="sla-kpi-hint">{isSheet ? 'K = B (stejný den)' : 'stejný business den'}</span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <MetricLabel helpId="vycet_sla_missing">Dnes chybí</MetricLabel>
+              <DrilldownCount
+                count={metrics.missing}
+                className="sla-kpi-value"
+                onOpen={() => onOpenMetric('missing', 'Dnes chybí')}
+              />
+              <span className="sla-kpi-hint">{isSheet ? 'přišlo − navoláno (stejný den)' : 'přišlo − navoláno'}</span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <MetricLabel helpId="vycet_sla_celkem">Splněno navolání</MetricLabel>
+              <DrilldownCount
+                count={metrics.navolano}
+                text={formatPercent(metrics.fulfilled_pct)}
+                className="sla-kpi-value"
+                title="Kliknutím zobrazíte navolané leady"
+                onOpen={() => onOpenMetric('navolano', 'Splněno — navolané leady')}
+              />
+              <span className="sla-kpi-hint">
+                {Number(metrics.navolano || 0).toLocaleString('cs-CZ')} /{' '}
+                {Number(metrics.leads || 0).toLocaleString('cs-CZ')}
+              </span>
             </article>
           </div>
         </div>
