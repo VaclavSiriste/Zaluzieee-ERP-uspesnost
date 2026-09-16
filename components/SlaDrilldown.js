@@ -119,7 +119,7 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
               {data?.source && String(data.source).includes('sheet')
                 ? isCalendar
                   ? 'OVT sheet · poptávky dle data přijetí leadu (B) · kontakt = datum navolání (K)'
-                  : 'OVT sheet · dnešek (Praha) · B = přijetí · K = datum navolání'
+                  : 'OVT sheet · filtr období na B · navoláno = K stejný den jako B'
                 : isCalendar
                   ? 'Kalendářní datum 00:00–23:59 · +2 h posun'
                   : 'Business datum 20:00–19:59 · +2 h posun'}
