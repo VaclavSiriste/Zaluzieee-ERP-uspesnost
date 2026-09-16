@@ -11,10 +11,12 @@ import {
   parseTargetNumber,
   readMonthBucket,
   readSelectedMonthKey,
+  readTargetsBrandId,
   readTargetsView,
   shiftMonthKey,
   writeMonthBucket,
   writeSelectedMonthKey,
+  writeTargetsBrandId,
   writeTargetsView
 } from '@/lib/targets-storage'
 import { syncTargetsCompletedFromErp } from '@/lib/sync-targets-completed'
@@ -99,6 +101,7 @@ function remapValues(valuesMap, idMap) {
 
 export default function TargetyPage() {
   const [view, setView] = useState('technicians')
+  const [targetsBrandId, setTargetsBrandId] = useState('cz')
   const [monthKey, setMonthKey] = useState('')
   const [bucket, setBucket] = useState(null)
   const [directoryOpen, setDirectoryOpen] = useState(false)
@@ -109,13 +112,21 @@ export default function TargetyPage() {
   const [erpSyncing, setErpSyncing] = useState(false)
   const [erpSyncError, setErpSyncError] = useState('')
 
-  async function loadMonthWithErp(nextMonthKey) {
-    const initial = readMonthBucket(nextMonthKey)
+  async function loadMonthWithErp(nextMonthKey, brandId = targetsBrandId) {
+    const initial = readMonthBucket(nextMonthKey, brandId)
     setBucket(initial)
+    // SK zatím bez organization_id — jen lokální targety + mapa
+    if (brandId === 'sk') {
+      setErpSyncing(false)
+      setErpSyncError('')
+      return
+    }
     setErpSyncing(true)
     setErpSyncError('')
     try {
-      const { bucket: synced } = await syncTargetsCompletedFromErp(nextMonthKey, initial)
+      const { bucket: synced } = await syncTargetsCompletedFromErp(nextMonthKey, initial, {
+        brandId
+      })
       setBucket(synced)
     } catch (err) {
       setErpSyncError(err.message || 'Nepodařilo se načíst splněno z ERP')
@@ -126,9 +137,11 @@ export default function TargetyPage() {
 
   useEffect(() => {
     const month = readSelectedMonthKey()
+    const brand = readTargetsBrandId()
     setMonthKey(month)
+    setTargetsBrandId(brand)
     setView(readTargetsView())
-    loadMonthWithErp(month)
+    loadMonthWithErp(month, brand)
   }, [])
 
   useEffect(() => {
@@ -147,10 +160,11 @@ export default function TargetyPage() {
 
   const monthLabel = useMemo(() => formatMonthLabel(monthKey), [monthKey])
   const monthOptions = useMemo(() => listMonthOptions(), [])
+  const brandLabel = targetsBrandId === 'sk' ? 'zaluzieee - SK' : 'zaluzieee - CZ'
 
   function persistBucket(nextBucket) {
     setBucket(nextBucket)
-    writeMonthBucket(monthKey, nextBucket)
+    writeMonthBucket(monthKey, nextBucket, targetsBrandId)
   }
 
   function changeMonth(nextMonthKey) {
@@ -158,7 +172,18 @@ export default function TargetyPage() {
     writeSelectedMonthKey(nextMonthKey)
     setQuery('')
     setSelectedRegionId('')
-    loadMonthWithErp(nextMonthKey)
+    loadMonthWithErp(nextMonthKey, targetsBrandId)
+  }
+
+  function changeBrand(nextBrandId) {
+    const id = nextBrandId === 'sk' ? 'sk' : 'cz'
+    setTargetsBrandId(id)
+    writeTargetsBrandId(id)
+    setQuery('')
+    setSelectedRegionId('')
+    setView(id === 'sk' ? 'regions' : view)
+    if (id === 'sk') writeTargetsView('regions')
+    loadMonthWithErp(monthKey, id)
   }
 
   function changeView(nextView) {
@@ -243,6 +268,10 @@ export default function TargetyPage() {
     updateRegions({ values: { ...regions.values, [id]: rawValue } })
   }
 
+  function handleRegionCompletedChange(id, rawValue) {
+    updateRegions({ completed: { ...regions.completed, [id]: rawValue } })
+  }
+
   function handleRegionLabelChange(id, rawLabel) {
     updateRegions({ labels: { ...regions.labels, [id]: rawLabel } })
   }
@@ -282,6 +311,17 @@ export default function TargetyPage() {
   function handleRegionAddName(name) {
     const normalized = normalizeRegionName(name)
     if (!normalized) return
+    if (targetsBrandId === 'sk') {
+      if (regionActiveSet.has('sk')) {
+        setMessage('Slovensko (sk) už je aktivní.')
+        return
+      }
+      updateRegions({
+        activeIds: [...regions.activeIds, 'sk']
+      })
+      setMessage('Přidáno Slovensko (sk).')
+      return
+    }
     const catalog = buildDefaultRegionCatalog()
     const id = resolveErpRegionId(normalized, catalog)
     if (!id) {
@@ -368,12 +408,33 @@ export default function TargetyPage() {
           <header className="targets-hero">
             <div className="targets-hero-copy">
               <p className="targets-kicker">Operátoři · plánování</p>
-              <h1>Targety</h1>
+              <h1>Targety · {brandLabel}</h1>
               <p>
-                Cílové hodnoty podle techniků nebo krajů. Splněno z ERP: technik = zaměřovač,
-                kraj = region z adresy zákazníka, obojí podle data zaměření v měsíci.
+                {targetsBrandId === 'sk'
+                  ? 'SK targety s mapou Slovenska. Celkový target pod mapou je region sk. Splněno zatím zadávejte ručně (chybí ERP organization_id pro SK).'
+                  : 'Cílové hodnoty podle techniků nebo krajů. Splněno z ERP: technik = zaměřovač, kraj = region z adresy zákazníka, obojí podle data zaměření v měsíci.'}
               </p>
               <div className="targets-hero-actions">
+                <div className="targets-view-switch" role="tablist" aria-label="Značka targetů">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={targetsBrandId === 'cz'}
+                    className={`targets-view-btn${targetsBrandId === 'cz' ? ' is-active' : ''}`}
+                    onClick={() => changeBrand('cz')}
+                  >
+                    CZ
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={targetsBrandId === 'sk'}
+                    className={`targets-view-btn${targetsBrandId === 'sk' ? ' is-active' : ''}`}
+                    onClick={() => changeBrand('sk')}
+                  >
+                    SK
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="targets-directory-btn"
@@ -517,6 +578,7 @@ export default function TargetyPage() {
 
           {view === 'regions' ? (
             <CzechRegionsMap
+              mapBrand={targetsBrandId === 'sk' ? 'sk' : 'cz'}
               catalog={regions.catalog}
               values={regions.values}
               completed={regions.completed}
@@ -530,8 +592,11 @@ export default function TargetyPage() {
                 if (id) setFocusRegionId(id)
               }}
               onValueChange={handleRegionValueChange}
+              onCompletedChange={
+                targetsBrandId === 'sk' ? handleRegionCompletedChange : undefined
+              }
               onLabelChange={handleRegionLabelChange}
-              completedReadOnly
+              completedReadOnly={targetsBrandId !== 'sk'}
             />
           ) : null}
 

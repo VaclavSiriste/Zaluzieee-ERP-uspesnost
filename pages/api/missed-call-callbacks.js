@@ -10,7 +10,11 @@ import {
   missedCallbackHoursAxisFilter,
   missedCallbackVariantFilter
 } from '@/lib/missed-call-callback-sql'
-import { resolveOperationsBrand } from '@/lib/operations-brands'
+import {
+  resolveBrandWorkingHoursProfile,
+  resolveOperationsBrand
+} from '@/lib/operations-brands'
+import { resolveWorkingHoursProfile } from '@/lib/working-hours-sql'
 import { resolveDateRange } from '@/lib/metrics-query'
 import fs from 'fs/promises'
 import path from 'path'
@@ -93,15 +97,22 @@ async function readCache() {
 
 function mapRow(row, orderMatch = null) {
   const hours = row.hours_to_callback != null ? Number(row.hours_to_callback) : null
+  const kind = row.resolution_kind || null
+  const resolved = Boolean(row.callback_at)
+  let label = 'Nenavoláno'
+  if (resolved && kind === 'inbound_answered') label = 'Zákazník zavolal znovu (zvednuto)'
+  else if (resolved) label = 'Navoláno (odchozí)'
+
   return {
     id: row.missed_id,
     kind: 'missed_callback',
-    label: row.callback_at ? 'Navoláno' : 'Nenavoláno',
+    label,
     detail: row.clid || null,
     start_time: row.missed_at,
     end_time: row.callback_at,
     duration_seconds: hours != null && Number.isFinite(hours) ? Math.round(hours * 3600) : 0,
     hours_to_callback: hours,
+    resolution_kind: kind,
     is_working_hours: row.is_working_hours === true,
     hours_axis_label: row.is_working_hours === true ? 'Pracovní doba' : 'Mimo pracovní dobu',
     callback_operator_id: row.callback_user || null,
@@ -117,7 +128,8 @@ function numOrNull(value) {
   return value != null && Number.isFinite(Number(value)) ? Number(value) : null
 }
 
-function buildSummary(row) {
+function buildSummary(row, { brandId = null } = {}) {
+  const hoursProfile = resolveWorkingHoursProfile(resolveBrandWorkingHoursProfile(brandId))
   return {
     total_missed: Number(row.total_missed) || 0,
     called_back: Number(row.called_back) || 0,
@@ -135,7 +147,8 @@ function buildSummary(row) {
       not_called_back: Number(row.outside_not_called_back) || 0,
       avg_hours_to_callback: numOrNull(row.outside_avg_hours)
     },
-    working_hours_rule: 'Po–Pá 8:00–20:00 · So–Ne 10:00–18:00 · Europe/Prague · dle času zmeškaného hovoru'
+    working_hours_rule: `${hoursProfile.label} · dle času zmeškaného hovoru`,
+    working_hours_short: hoursProfile.shortLabel
   }
 }
 
@@ -197,7 +210,7 @@ export default async function handler(req, res) {
     `
 
     const summaryResult = await queryWithRetry(summarySql, params)
-    const summary = buildSummary(summaryResult.rows[0] || {})
+    const summary = buildSummary(summaryResult.rows[0] || {}, { brandId: brand })
 
     if (summaryOnly) {
       const payload = {
@@ -233,6 +246,7 @@ export default async function handler(req, res) {
         mc.callback_user,
         mc.hours_to_callback,
         mc.is_working_hours,
+        mc.resolution_kind,
         COALESCE(
           NULLIF(TRIM(u.title), ''),
           NULLIF(TRIM(u.name), ''),

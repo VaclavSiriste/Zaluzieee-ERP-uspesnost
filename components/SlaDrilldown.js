@@ -55,7 +55,11 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
           offset: String(offset),
           limit: '50',
           ...(filters.startDate ? { startDate: filters.startDate } : {}),
-          ...(filters.endDate ? { endDate: filters.endDate } : {})
+          ...(filters.endDate ? { endDate: filters.endDate } : {}),
+          ...(filters.brand ? { brand: filters.brand } : {}),
+          ...(filters.organizationId != null && filters.organizationId !== ''
+            ? { organizationId: String(filters.organizationId) }
+            : {})
         })
         const response = await fetch(`/api/vycet-sla-orders?${params}`)
         const payload = await response.json()
@@ -115,6 +119,13 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
               {isCalendar
                 ? 'Kalendářní datum 00:00–23:59 · +2 h posun'
                 : 'Business datum 20:00–19:59 · +2 h posun'}
+              {data?.organization_id != null
+                ? ` · organization_id č. ${data.organization_id}`
+                : filters?.organizationId != null
+                  ? ` · organization_id č. ${filters.organizationId}`
+                  : filters?.brand
+                    ? ` · značka ${filters.brand}`
+                    : ''}
             </p>
             {data ? (
               <p className="drilldown-meta">

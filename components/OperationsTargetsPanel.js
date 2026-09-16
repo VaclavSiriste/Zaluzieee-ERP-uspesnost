@@ -12,6 +12,7 @@ import {
   shiftMonthKey,
   writeMonthBucket,
   writeSelectedMonthKey,
+  writeTargetsBrandId,
   writeTargetsView
 } from '@/lib/targets-storage'
 import { syncTargetsCompletedFromErp, syncTargetsCompletedFromOvtSheet } from '@/lib/sync-targets-completed'
@@ -164,6 +165,8 @@ export default function OperationsTargetsPanel({
           brandId: targetsBrandId
         })
         setBucket(synced)
+      } else if (organizationId == null) {
+        setBucket(initial)
       } else {
         const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
           organizationId,
@@ -351,7 +354,15 @@ export default function OperationsTargetsPanel({
                 ›
               </button>
             </div>
-            <Link href="/targety" className="ops-targets-edit-link">
+            <Link
+              href="/targety"
+              className="ops-targets-edit-link"
+              onClick={() => {
+                if (targetsBrandId === 'sk' || targetsBrandId === 'cz') {
+                  writeTargetsBrandId(targetsBrandId)
+                }
+              }}
+            >
               Upravit detailně v Targety →
             </Link>
           </div>

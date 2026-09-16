@@ -3,10 +3,12 @@
  * metric:
  *   leads|navolano|missing  → business datum
  *   poptavky|sla24|sla48|sla72 → kalendářní datum (+2h)
+ * Volitelný filtr značky: ?brand=… → orders.organization_id
  */
 
 import { getPool } from '@/lib/db-esm'
 import { SYSTEEEM_ORDER_URL } from '@/lib/metrics-query'
+import { resolveOrganizationId } from '@/lib/operations-brands'
 import {
   BUSINESS_DATE_SQL,
   CALENDAR_DATE_SQL,
@@ -16,9 +18,11 @@ import {
   SLA48_FLAG_SQL,
   SLA72_FLAG_SQL,
   SLA_BASE_FILTERS_SQL,
-  SLA_POPTAVKY_FILTERS_SQL,
   SLA_POPTAVKY_FROM_SQL,
-  resolveSlaRange
+  appendOrganizationFilter,
+  buildSlaPoptavkyFiltersSql,
+  resolveSlaRange,
+  shouldExcludeVenkovkyReason
 } from '@/lib/sla-metrics'
 
 const DEFAULT_LIMIT = 50
@@ -45,6 +49,22 @@ export default async function handler(req, res) {
 
   const metric = resolveMetric(req.query.metric)
   const period = typeof req.query.period === 'string' ? req.query.period : 'month'
+  const brandId = typeof req.query.brand === 'string' ? req.query.brand : ''
+  const organizationId = resolveOrganizationId({
+    brandId,
+    organizationId: req.query.organizationId
+  })
+  const requireBrand =
+    Boolean(brandId) ||
+    (req.query.organizationId != null && String(req.query.organizationId).trim() !== '')
+
+  if (requireBrand && organizationId == null) {
+    return res.status(400).json({
+      error:
+        'Chybí organization_id (company ID) pro zvolenou značku. Doplňte ho v lib/operations-brands.js.'
+    })
+  }
+
   const useCalendar = CALENDAR_METRICS.has(metric)
   const dateSql = useCalendar ? CALENDAR_DATE_SQL : BUSINESS_DATE_SQL
   const parsedLimit = Math.min(
@@ -63,9 +83,17 @@ export default async function handler(req, res) {
     else if (metric === 'sla48') metricWhere = `AND (${SLA48_FLAG_SQL}) = 1`
     else if (metric === 'sla72') metricWhere = `AND (${SLA72_FLAG_SQL}) = 1`
 
-    const filtersSql = useCalendar ? SLA_POPTAVKY_FILTERS_SQL : SLA_BASE_FILTERS_SQL
-    // vždy join customers — seznam ukazuje region; poptávky filtry ho potřebují
+    const excludeVenkovky = shouldExcludeVenkovkyReason(organizationId, brandId)
+    const filtersSql = useCalendar
+      ? buildSlaPoptavkyFiltersSql({ excludeVenkovkyReason: excludeVenkovky })
+      : SLA_BASE_FILTERS_SQL
     const fromSql = SLA_POPTAVKY_FROM_SQL
+
+    const countBase = appendOrganizationFilter([start, end], organizationId)
+    const listBase = appendOrganizationFilter([start, end], organizationId)
+    const listParams = [...listBase.params, parsedLimit, parsedOffset]
+    const limitPlaceholder = `$${listBase.params.length + 1}`
+    const offsetPlaceholder = `$${listBase.params.length + 2}`
 
     const countResult = await pool.query(
       `
@@ -74,9 +102,10 @@ export default async function handler(req, res) {
       WHERE (${dateSql}) >= $1::date
         AND (${dateSql}) <= $2::date
         ${filtersSql}
+        ${countBase.sql}
         ${metricWhere}
       `,
-      [start, end]
+      countBase.params
     )
 
     const { rows } = await pool.query(
@@ -86,6 +115,7 @@ export default async function handler(req, res) {
         o.created_at,
         o.first_iframe_change_at,
         o.status,
+        o.organization_id,
         COALESCE(NULLIF(TRIM(c.region), ''), 'N/A') AS region,
         (${BUSINESS_DATE_SQL}) AS business_date,
         (${CALENDAR_DATE_SQL}) AS calendar_date,
@@ -107,11 +137,12 @@ export default async function handler(req, res) {
       WHERE (${dateSql}) >= $1::date
         AND (${dateSql}) <= $2::date
         ${filtersSql}
+        ${listBase.sql}
         ${metricWhere}
       ORDER BY o.created_at DESC
-      LIMIT $3 OFFSET $4
+      LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}
       `,
-      [start, end, parsedLimit, parsedOffset]
+      listParams
     )
 
     const labels = {
@@ -129,6 +160,8 @@ export default async function handler(req, res) {
       label: labels[metric] || labels.leads,
       mode: useCalendar ? 'calendar' : 'business',
       period,
+      brand: brandId || null,
+      organization_id: organizationId,
       start: start.toISOString(),
       end: end.toISOString(),
       total: countResult.rows[0]?.total || 0,
@@ -136,6 +169,7 @@ export default async function handler(req, res) {
       offset: parsedOffset,
       orders: rows.map((row) => ({
         order_id: row.order_id,
+        organization_id: row.organization_id != null ? Number(row.organization_id) : null,
         business_date: row.business_date,
         calendar_date: row.calendar_date,
         created_at: row.created_at,

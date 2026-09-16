@@ -11,8 +11,8 @@
  * 4) URL nasazení dej do Prvni/.env jako POKLADAMEE_OVT_SHEET_WEBAPP_URL
  *    a stejný token jako POKLADAMEE_OVT_SHEET_TOKEN
  *
- * Sloupce: K = datum navolání, L = dopadl hovor, P = datum zaměření,
- *          Q = OVT technik, U = kraj
+ * Sloupce: K = datum navolání, L = dopadl hovor, N = důvod (vyřazení z úspěšnosti),
+ *          P = datum zaměření, Q = OVT technik, U = kraj
  * Řádek 2 = nadpis, data od řádku 3.
  */
 
@@ -22,6 +22,7 @@ var SHEET_GID = 1262379590;
 var DATA_START_ROW = 3;
 var COL_DATUM = 11; // K
 var COL_DOPADL = 12; // L
+var COL_DUVOD = 14; // N
 var COL_DATUM_ZAMERENI = 16; // P
 var COL_TECHNIK = 17; // Q
 var COL_KRAJ = 21; // U
@@ -102,9 +103,9 @@ function readSheetRows_(sheet) {
 function analyze_(rows, startDate, endDate) {
   var techNames = [];
   var techSeen = {};
-  var total = 0;
   var ano = 0;
   var ne = 0;
+  var excludedByReason = 0;
   var completedTotal = 0;
   var completedByTech = {};
   var completedByRegion = {};
@@ -146,18 +147,23 @@ function analyze_(rows, startDate, endDate) {
     if (startDate && dateStr < startDate) continue;
     if (endDate && dateStr > endDate) continue;
 
-    total++;
+    if (isExcludedNavolaniReason_(row[COL_DUVOD - 1])) {
+      excludedByReason++;
+      continue;
+    }
+
     var dopadl = String(row[COL_DOPADL - 1] || '').trim().toLowerCase();
     dopadl = dopadl
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
     if (dopadl === 'ano' || dopadl === 'yes' || dopadl === '1' || dopadl === 'true') {
       ano++;
-    } else if (String(row[COL_DOPADL - 1] || '').trim()) {
+    } else if (dopadl === 'ne' || dopadl === 'no' || dopadl === '0' || dopadl === 'false') {
       ne++;
     }
   }
 
+  var decided = ano + ne;
   techNames.sort(function (a, b) {
     return a.name.localeCompare(b.name, 'cs');
   });
@@ -167,14 +173,15 @@ function analyze_(rows, startDate, endDate) {
     success: {
       dopadl_hovor_ano: ano,
       dopadl_hovor_ne: ne,
-      dopadl_hovor_pocet: total,
-      success_navolani_pct: total > 0 ? (ano / total) * 100 : null,
+      dopadl_hovor_pocet: decided,
+      success_navolani_pct: decided > 0 ? (ano / decided) * 100 : null,
       domluveno_zamereni_ano: 0,
       domluveno_zamereni_ne: 0,
       domluveno_zamereni_pocet: 0,
       by_operator: [],
       source: 'pokladamee-ovt-sheet',
-      date_basis: 'datum_navolani'
+      date_basis: 'datum_navolani',
+      excluded_by_reason: excludedByReason
     },
     targets: {
       source: 'pokladamee-ovt-sheet',
@@ -187,6 +194,42 @@ function analyze_(rows, startDate, endDate) {
       }
     }
   };
+}
+
+function isExcludedNavolaniReason_(value) {
+  var norm = String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[–—−]/g, '-')
+    .replace(/[_/.,;:]+/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!norm) return false;
+  if (
+    norm === 'mimodosah' ||
+    norm === 'mimo dosah' ||
+    norm.indexOf('mimodosah') !== -1 ||
+    norm.indexOf('mimo dosah') !== -1 ||
+    norm.indexOf('projekt mimodosah') !== -1
+  ) {
+    return true;
+  }
+  if (norm === 'duplikace' || norm === 'duplicita' || norm.indexOf('duplikac') !== -1 || norm.indexOf('duplicit') !== -1) {
+    return true;
+  }
+  if (norm === 'nemozna realizace' || norm.indexOf('nemozna realiz') !== -1) {
+    return true;
+  }
+  if (norm === 'zajem o spolupraci' || norm.indexOf('zajem o spolupr') !== -1) {
+    return true;
+  }
+  if (norm === 'zadost o praci' || norm.indexOf('zadost o prac') !== -1) {
+    return true;
+  }
+  return false;
 }
 
 function parseDate_(value) {

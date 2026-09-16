@@ -8,6 +8,8 @@ import IncomingLineSlaDrilldown from '@/components/IncomingLineSlaDrilldown'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
+import SlaDrilldown from '@/components/SlaDrilldown'
+import VycetSlaPanel from '@/components/VycetSlaPanel'
 import { OPERATIONS_BRANDS } from '@/lib/operations-brands'
 
 function formatPercent(value) {
@@ -128,6 +130,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const brand = OPERATIONS_BRANDS[brandId] || OPERATIONS_BRANDS.cz
   const showTargets = brand.showTargets === true
   const navolaniConfigured = brand.organizationId != null || brand.navolaniSource === 'ovt-sheet'
+  const vycetSlaConfigured = brand.organizationId != null
 
   const [period, setPeriod] = useState('month')
   const [startDate, setStartDate] = useState('')
@@ -144,12 +147,17 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [breakdownOpen, setBreakdownOpen] = useState(false)
   const [navolaniOpen, setNavolaniOpen] = useState(false)
   const [callbackOpen, setCallbackOpen] = useState(false)
+  const [vycetSlaOpen, setVycetSlaOpen] = useState(false)
   const [drilldown, setDrilldown] = useState(null)
   const [navolaniDrilldown, setNavolaniDrilldown] = useState(null)
   const [callbackDrilldown, setCallbackDrilldown] = useState(null)
+  const [vycetSlaDrilldown, setVycetSlaDrilldown] = useState(null)
   const [callbackSummary, setCallbackSummary] = useState(null)
   const [callbackLoading, setCallbackLoading] = useState(true)
   const [callbackError, setCallbackError] = useState('')
+  const [vycetSlaMetrics, setVycetSlaMetrics] = useState(null)
+  const [vycetSlaLoading, setVycetSlaLoading] = useState(true)
+  const [vycetSlaError, setVycetSlaError] = useState('')
 
   const filters = useMemo(
     () => ({
@@ -159,6 +167,17 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
       brand: brand.id
     }),
     [period, startDate, endDate, brand.id]
+  )
+
+  const vycetSlaFilters = useMemo(
+    () => ({
+      period,
+      startDate,
+      endDate,
+      brand: brand.id,
+      organizationId: brand.organizationId
+    }),
+    [period, startDate, endDate, brand.id, brand.organizationId]
   )
 
   const breakdownItems = useMemo(
@@ -175,12 +194,14 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     fetchData()
     fetchNavolaniData()
     fetchCallbackData()
+    fetchVycetSlaData()
   }, [period, startDate, endDate, brand.id])
 
   useEffect(() => {
     setBreakdownOpen(false)
     setNavolaniOpen(false)
     setCallbackOpen(false)
+    setVycetSlaOpen(false)
   }, [period, startDate, endDate, brand.id])
 
   async function fetchData() {
@@ -292,6 +313,42 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     }
   }
 
+  async function fetchVycetSlaData() {
+    if (!vycetSlaConfigured) {
+      setVycetSlaMetrics(null)
+      setVycetSlaError('')
+      setVycetSlaLoading(false)
+      return
+    }
+
+    setVycetSlaLoading(true)
+    setVycetSlaError('')
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 20000)
+      const params = new URLSearchParams({
+        period,
+        brand: brand.id,
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {})
+      })
+      const response = await fetch(`/api/vycet-sla?${params}`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      const data = await response.json()
+      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+      setVycetSlaMetrics(data.metrics || null)
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setVycetSlaError('Načítání Výčtu SLA trvalo příliš dlouho.')
+      } else {
+        setVycetSlaError(err.message || 'Nepodařilo se načíst Výčet SLA')
+      }
+      setVycetSlaMetrics(null)
+    } finally {
+      setVycetSlaLoading(false)
+    }
+  }
+
   function handlePeriodChange(nextPeriod) {
     setPeriod(nextPeriod)
     if (nextPeriod !== 'custom') {
@@ -306,6 +363,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
 
   function openNavolaniMetric(metric, title, operatorName = '') {
     setNavolaniDrilldown({ metric, title, operatorName, brand: brand.id })
+  }
+
+  function openVycetSlaMetric(metric, title) {
+    setVycetSlaDrilldown({ metric, title })
   }
 
   function openCallbackDrilldown(variant, title, subtitle, hoursAxis = 'all') {
@@ -329,9 +390,11 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               <p className="sla-kicker">Provoz · Daktela + ERP reporting</p>
               <h1>{brand.pageTitle}</h1>
               <p className="sla-hero-lead">
-                SLA příchozích linek ({brand.slaLineHint}), průměrná doba do navolání zmeškaných,
+                SLA příchozích linek ({brand.slaLineHint}), Výčet SLA z ERP
+                {vycetSlaConfigured ? ` (organization_id č. ${brand.organizationId})` : ''},
+                průměrná doba do navolání zmeškaných,
                 {brand.navolaniSource === 'ovt-sheet'
-                  ? ' úspěšnost navolání z OVT sheetu (gid 1262379590)'
+                  ? ' úspěšnost navolání z OVT sheetu'
                   : ` úspěšnost navolání z ERP${
                       navolaniConfigured && brand.organizationId != null
                         ? ` (organizace č. ${brand.organizationId})`
@@ -360,7 +423,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             metricHelpId="filter_obdobi"
           />
 
-          {loading && navolaniLoading && callbackLoading ? (
+          {loading && navolaniLoading && callbackLoading && (!vycetSlaConfigured || vycetSlaLoading) ? (
             <div className="sla-loading">
               <span className="pauses-spinner" />
               Načítám metriky provozu…
@@ -369,13 +432,28 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
 
           {error ? (
             <section className="sla-error">
-              <p className="danger">SLA: {error}</p>
+              <p className="danger">SLA příchozí linky: {error}</p>
             </section>
           ) : null}
 
           {callbackError ? (
             <section className="sla-error">
               <p className="danger">Doba do navolání: {callbackError}</p>
+            </section>
+          ) : null}
+
+          {vycetSlaConfigured && vycetSlaError ? (
+            <section className="sla-error">
+              <p className="danger">Výčet SLA: {vycetSlaError}</p>
+            </section>
+          ) : null}
+
+          {!vycetSlaConfigured ? (
+            <section className="sla-error">
+              <p className="danger">
+                Výčet SLA: chybí <code>organization_id</code> (company ID) pro {brand.pageTitle}. Doplňte
+                ho v <code>lib/operations-brands.js</code>.
+              </p>
             </section>
           ) : null}
 
@@ -461,7 +539,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                             <strong className="sla-queue-breakdown-value">
                               {item.total_calls.toLocaleString('cs-CZ')}
                             </strong>
-                            <span className="sla-queue-breakdown-hint">
+                              <span className="sla-queue-breakdown-hint">
                               <span className="sla-queue-breakdown-hint-part">
                                 {item.answered.toLocaleString('cs-CZ')} zvednutých ({formatPercent(item.answered_pct)})
                                 <MetricInfoTip helpId="sla_queue_answered" />
@@ -481,6 +559,16 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                                 {(item.outside_hours_calls || 0).toLocaleString('cs-CZ')} mimo
                                 <MetricInfoTip helpId="sla_outside_hours" />
                               </span>
+                              {' · '}
+                              <span className="sla-queue-breakdown-hint-part">
+                                {(item.working_hours_missed || 0).toLocaleString('cs-CZ')} zmešk. prac.
+                                <MetricInfoTip helpId="sla_working_hours_missed" />
+                              </span>
+                              {' · '}
+                              <span className="sla-queue-breakdown-hint-part">
+                                {(item.outside_hours_missed || 0).toLocaleString('cs-CZ')} zmešk. mimo
+                                <MetricInfoTip helpId="sla_outside_hours_missed" />
+                              </span>
                             </span>
                           </article>
                         ))}
@@ -499,6 +587,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                           {(metrics.queue_breakdown.totals.working_hours_calls || 0).toLocaleString('cs-CZ')} pracovní
                           {' · '}
                           {(metrics.queue_breakdown.totals.outside_hours_calls || 0).toLocaleString('cs-CZ')} mimo
+                          {' · '}
+                          {(metrics.queue_breakdown.totals.working_hours_missed || 0).toLocaleString('cs-CZ')} zmešk. prac.
+                          {' · '}
+                          {(metrics.queue_breakdown.totals.outside_hours_missed || 0).toLocaleString('cs-CZ')} zmešk. mimo
                         </p>
                       ) : null}
                     </div>
@@ -541,19 +633,29 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 <MetricInfoTip helpId="sla_working_hours" />
               </h2>
               <p className="sla-block-desc">
-                Příchozí hovory na linkách {brand.pageTitle}. Pracovní doba: Po–Pá 8–20 · So–Ne 10–18
-                (Europe/Prague). Mimo = ostatní časy.
+                Příchozí hovory na linkách {brand.pageTitle}. Pracovní doba:{' '}
+                {metrics.working_hours_short || metrics.working_hours_rule || 'Po–Pá 8–20 · So–Ne 10–18'}{' '}
+                (Europe/Prague). Mimo = ostatní časy. U každé osy i počet zmeškaných.
               </p>
               <div className="sla-kpi-breakdown" aria-label="Hovory podle pracovní doby">
                 <article className="sla-kpi sla-kpi-child">
-                  <MetricLabel helpId="sla_working_hours">V pracovní době</MetricLabel>
+                  <MetricLabel helpId="sla_working_hours">Hovory · pracovní doba</MetricLabel>
                   <strong className="sla-kpi-value">
                     {(metrics.working_hours_calls || 0).toLocaleString('cs-CZ')}
                   </strong>
-                  <span className="sla-kpi-hint">Po–Pá 8–20 · So–Ne 10–18</span>
+                  <span className="sla-kpi-hint">
+                    {metrics.working_hours_short || 'Po–Pá 8–20 · So–Ne 10–18'}
+                  </span>
                 </article>
                 <article className="sla-kpi sla-kpi-child">
-                  <MetricLabel helpId="sla_outside_hours">Mimo pracovní dobu</MetricLabel>
+                  <MetricLabel helpId="sla_working_hours_missed">Zmeškané · pracovní doba</MetricLabel>
+                  <strong className="sla-kpi-value">
+                    {(metrics.working_hours_missed || 0).toLocaleString('cs-CZ')}
+                  </strong>
+                  <span className="sla-kpi-hint">nezvednuté IN v pracovní době</span>
+                </article>
+                <article className="sla-kpi sla-kpi-child">
+                  <MetricLabel helpId="sla_outside_hours">Hovory · mimo</MetricLabel>
                   <strong className="sla-kpi-value">
                     {(metrics.outside_hours_calls || 0).toLocaleString('cs-CZ')}
                   </strong>
@@ -564,8 +666,31 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                     příchozích celkem na linkách značky
                   </span>
                 </article>
+                <article className="sla-kpi sla-kpi-child">
+                  <MetricLabel helpId="sla_outside_hours_missed">Zmeškané · mimo</MetricLabel>
+                  <strong className="sla-kpi-value">
+                    {(metrics.outside_hours_missed || 0).toLocaleString('cs-CZ')}
+                  </strong>
+                  <span className="sla-kpi-hint">
+                    {(
+                      (metrics.working_hours_missed || 0) + (metrics.outside_hours_missed || 0)
+                    ).toLocaleString('cs-CZ')}{' '}
+                    zmeškaných celkem
+                  </span>
+                </article>
               </div>
             </section>
+          ) : null}
+
+          {vycetSlaConfigured && !vycetSlaLoading && !vycetSlaError && vycetSlaMetrics ? (
+            <VycetSlaPanel
+              metrics={vycetSlaMetrics}
+              expanded={vycetSlaOpen}
+              onToggle={() => setVycetSlaOpen((open) => !open)}
+              onOpenMetric={openVycetSlaMetric}
+              organizationId={brand.organizationId}
+              brandLabel={brand.pageTitle}
+            />
           ) : null}
 
           {!callbackLoading && !callbackError && callbackSummary ? (
@@ -575,8 +700,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 <MetricInfoTip helpId="missed_callback_avg" />
               </h2>
               <p className="sla-block-desc">
-                Zmeškaný příchozí → první odchozí zpět. Dvě osy dle času zmeškání (Europe/Prague):
-                pracovní doba Po–Pá 8–20 / So–Ne 10–18 · mimo = ostatní časy. Fronty {brand.pageTitle}.
+                Zmeškaný příchozí → vyřízení: naše odchozí zpět, nebo zákazník zavolá znovu a my to
+                zvedneme. Dvě osy dle času zmeškání (Europe/Prague): pracovní doba{' '}
+                {callbackSummary.working_hours_short || 'Po–Pá 8–20 / So–Ne 10–18'} · mimo = ostatní
+                časy. Fronty {brand.pageTitle}.
               </p>
 
               <button
@@ -617,7 +744,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                         openCallbackDrilldown(
                           'called_back',
                           `${brand.pageTitle} — Navolání v pracovní době`,
-                          'Po–Pá 8–20 · So–Ne 10–18 · dle času zmeškaného hovoru',
+                          `${callbackSummary.working_hours_short || 'Po–Pá 8–20 · So–Ne 10–18'} · dle času zmeškaného hovoru`,
                           'working'
                         )
                       }
@@ -638,7 +765,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                         openCallbackDrilldown(
                           'called_back',
                           `${brand.pageTitle} — Navolání mimo pracovní dobu`,
-                          'Mimo Po–Pá 8–20 a So–Ne 10–18 · dle času zmeškaného hovoru',
+                          `Mimo ${callbackSummary.working_hours_short || 'Po–Pá 8–20 a So–Ne 10–18'} · dle času zmeškaného hovoru`,
                           'outside'
                         )
                       }
@@ -673,7 +800,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                         openCallbackDrilldown(
                           'open',
                           `${brand.pageTitle} — Nenavolané zmeškané`,
-                          'Zmeškané příchozí bez následného odchozího hovoru na stejné číslo'
+                          'Zmeškané bez pozdějšího OUT ani zvednutého IN od stejného čísla'
                         )
                       }
                     />
@@ -731,6 +858,13 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
         onClose={() => setCallbackDrilldown(null)}
         drilldown={callbackDrilldown}
         filters={filters}
+      />
+
+      <SlaDrilldown
+        open={Boolean(vycetSlaDrilldown)}
+        onClose={() => setVycetSlaDrilldown(null)}
+        drilldown={vycetSlaDrilldown}
+        filters={vycetSlaFilters}
       />
     </main>
   )

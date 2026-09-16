@@ -12,6 +12,30 @@ function formatPercent(value) {
 function buildBreakdownItems(metrics) {
   return [
     {
+      metric: 'dopadl_hovor_ano',
+      title: 'Dopadl hovor ANO',
+      label: 'Dopadl hovor ANO',
+      helpId: 'navolani_dopadl_ano',
+      count: metrics.dopadl_hovor_ano,
+      hint: 'Čitatel úspěšnosti'
+    },
+    {
+      metric: 'dopadl_hovor_ne',
+      title: 'Dopadl hovor NE',
+      label: 'Dopadl hovor NE',
+      helpId: 'navolani_dopadl_ne',
+      count: metrics.dopadl_hovor_ne,
+      hint: 'Součást jmenovatele'
+    },
+    {
+      metric: 'dopadl_hovor_pocet',
+      title: 'Dopadl hovor ANO + NE',
+      label: 'Celkem ANO + NE',
+      helpId: 'navolani_celkem',
+      count: metrics.dopadl_hovor_pocet,
+      hint: 'Jmenovatel úspěšnosti'
+    },
+    {
       metric: 'domluveno_zamereni_ano',
       title: 'Naplánován termín zaměření ANO',
       label: 'Termín zaměření ANO',
@@ -19,26 +43,11 @@ function buildBreakdownItems(metrics) {
       count: metrics.domluveno_zamereni_ano
     },
     {
-      metric: 'dopadl_hovor_ano',
-      title: 'Dopadl hovor ANO',
-      label: 'Dopadl hovor ANO',
-      helpId: 'navolani_dopadl_ano',
-      count: metrics.dopadl_hovor_ano,
-      hint: 'Jmenovatel úspěšnosti'
-    },
-    {
       metric: 'domluveno_zamereni_ne',
       title: 'Naplánován termín zaměření NE',
       label: 'Termín zaměření NE',
       helpId: 'navolani_zamereni_ne',
       count: metrics.domluveno_zamereni_ne
-    },
-    {
-      metric: 'dopadl_hovor_ne',
-      title: 'Dopadl hovor NE',
-      label: 'Dopadl hovor NE',
-      helpId: 'navolani_dopadl_ne',
-      count: metrics.dopadl_hovor_ne
     }
   ]
 }
@@ -48,7 +57,7 @@ export default function CallSuccessNavolaniPanel({
   expanded,
   onToggle,
   onOpenMetric,
-  navolaniHint = 'ERP · termín zaměření ANO / dopadl hovor ANO',
+  navolaniHint = 'ERP · Dopadl hovor ANO / (ANO + NE)',
   organizationId = null,
   source = 'erp-db'
 }) {
@@ -71,11 +80,11 @@ export default function CallSuccessNavolaniPanel({
         },
         {
           metric: 'dopadl_hovor_pocet',
-          title: 'Celkem řádků v období',
-          label: 'Celkem (filtr K)',
+          title: 'Dopadl hovor ANO + NE',
+          label: 'Celkem ANO + NE',
           helpId: 'navolani_celkem',
           count: metrics.dopadl_hovor_pocet,
-          hint: 'Jmenovatel · datum navolání ve filtru'
+          hint: 'Jmenovatel · pouze ANO a NE ve sloupci L (bez vyloučených N)'
         }
       ]
     : buildBreakdownItems(metrics)
@@ -91,10 +100,10 @@ export default function CallSuccessNavolaniPanel({
         {expanded
           ? `${navolaniHint}${fromSheet ? '' : '. Klikněte pro seznam zakázek.'}`
           : fromSheet
-            ? 'Google Sheet OVT · klikněte pro rozpad — Dopadl hovor ANO / počet řádků dle data navolání.'
+            ? 'Google Sheet OVT · klikněte pro rozpad — Dopadl hovor ANO / (ANO + NE).'
             : organizationId != null
-              ? `Organizace č. ${organizationId} · klikněte pro rozpad — data z ERP, ne z Daktely.`
-              : 'Klikněte pro rozpad — data z ERP, ne z Daktely.'}
+              ? `Organizace č. ${organizationId} · Dopadl hovor ANO / (ANO + NE) · data z ERP.`
+              : 'Klikněte pro rozpad — Dopadl hovor ANO / (ANO + NE) · data z ERP.'}
       </p>
 
       <button
@@ -108,9 +117,7 @@ export default function CallSuccessNavolaniPanel({
         </MetricLabel>
         <strong className="sla-kpi-value">{formatPercent(pct)}</strong>
         <span className="sla-kpi-hint">
-          {fromSheet
-            ? `${Number(metrics.dopadl_hovor_ano || 0).toLocaleString('cs-CZ')} ANO / ${Number(metrics.dopadl_hovor_pocet || 0).toLocaleString('cs-CZ')} celkem`
-            : `${Number(metrics.domluveno_zamereni_ano || 0).toLocaleString('cs-CZ')} termín ANO / ${Number(metrics.dopadl_hovor_ano || 0).toLocaleString('cs-CZ')} dopadl hovor ANO`}
+          {`${Number(metrics.dopadl_hovor_ano || 0).toLocaleString('cs-CZ')} ANO / ${Number(metrics.dopadl_hovor_pocet || 0).toLocaleString('cs-CZ')} (ANO + NE)`}
         </span>
         <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
       </button>
@@ -154,19 +161,6 @@ export default function CallSuccessNavolaniPanel({
                         <MetricInfoTip helpId="navolani_operator" />
                       </span>
                       <DrilldownCount
-                        count={row.domluveno_zamereni_ano}
-                        className="navolani-operator-count"
-                        title={`${row.operator_name} — termín zaměření ANO`}
-                        onOpen={() =>
-                          onOpenMetric(
-                            'domluveno_zamereni_ano',
-                            `${row.operator_name} — termín zaměření ANO`,
-                            row.operator_name
-                          )
-                        }
-                      />
-                      <span className="navolani-operator-sep">/</span>
-                      <DrilldownCount
                         count={row.dopadl_hovor_ano}
                         className="navolani-operator-count"
                         title={`${row.operator_name} — dopadl hovor ANO`}
@@ -174,6 +168,19 @@ export default function CallSuccessNavolaniPanel({
                           onOpenMetric(
                             'dopadl_hovor_ano',
                             `${row.operator_name} — dopadl hovor ANO`,
+                            row.operator_name
+                          )
+                        }
+                      />
+                      <span className="navolani-operator-sep">/</span>
+                      <DrilldownCount
+                        count={row.dopadl_hovor_pocet}
+                        className="navolani-operator-count"
+                        title={`${row.operator_name} — dopadl hovor ANO + NE`}
+                        onOpen={() =>
+                          onOpenMetric(
+                            'dopadl_hovor_pocet',
+                            `${row.operator_name} — dopadl hovor ANO + NE`,
                             row.operator_name
                           )
                         }

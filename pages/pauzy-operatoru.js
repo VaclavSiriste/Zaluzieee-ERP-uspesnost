@@ -924,7 +924,7 @@ export default function OperatorPausesPage() {
                           openMissedCallbackDrilldown(
                             'open',
                             'Nenavolané zmeškané hovory',
-                            'Zmeškané příchozí bez následného odchozího hovoru na stejné číslo'
+                            'Zmeškané bez pozdějšího OUT ani zvednutého IN od stejného čísla'
                           )
                         }
                       />

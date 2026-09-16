@@ -1,9 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import TargetBarInput from '@/components/TargetBarInput'
-import { ALL_CZECH_REGIONS, DEFAULT_CZECH_REGIONS, EXTRA_REGIONS, MAP_VIEWBOX } from '@/lib/czech-regions'
+import {
+  ALL_CZECH_REGIONS,
+  DEFAULT_CZECH_REGIONS,
+  EXTRA_REGIONS,
+  MAP_VIEWBOX as CZ_MAP_VIEWBOX
+} from '@/lib/czech-regions'
+import {
+  ALL_SLOVAK_REGIONS,
+  DEFAULT_SLOVAK_REGIONS,
+  EXTRA_SLOVAK_REGIONS,
+  MAP_VIEWBOX as SK_MAP_VIEWBOX
+} from '@/lib/slovak-regions'
 import { parseTargetNumber } from '@/lib/targets-storage'
 
-const EXTRA_REGION_IDS = new Set(EXTRA_REGIONS.map((item) => item.id))
+const EXTRA_REGION_IDS_CZ = new Set(EXTRA_REGIONS.map((item) => item.id))
+const EXTRA_REGION_IDS_SK = new Set(EXTRA_SLOVAK_REGIONS.map((item) => item.id))
 
 function formatTarget(value) {
   const raw = String(value || '').trim()
@@ -66,14 +78,23 @@ export default function CzechRegionsMap({
   onLabelChange,
   completedReadOnly = false,
   overallTarget = null,
-  overallCompleted = null
+  overallCompleted = null,
+  /** 'cz' | 'sk' */
+  mapBrand = 'cz'
 }) {
+  const isSk = mapBrand === 'sk'
+  const mapViewBox = isSk ? SK_MAP_VIEWBOX : CZ_MAP_VIEWBOX
+  const defaultRegions = isSk ? DEFAULT_SLOVAK_REGIONS : DEFAULT_CZECH_REGIONS
+  const allRegions = isSk ? ALL_SLOVAK_REGIONS : ALL_CZECH_REGIONS
+  const extraRegions = isSk ? EXTRA_SLOVAK_REGIONS : EXTRA_REGIONS
+  const extraIds = isSk ? EXTRA_REGION_IDS_SK : EXTRA_REGION_IDS_CZ
+
   const [hoveredId, setHoveredId] = useState('')
   const valueInputRef = useRef(null)
   const activeSet = useMemo(() => new Set(activeIds), [activeIds])
 
   const regionById = useMemo(() => {
-    const map = new Map(ALL_CZECH_REGIONS.map((item) => [item.id, item]))
+    const map = new Map(allRegions.map((item) => [item.id, item]))
     for (const item of catalog) {
       if (!map.has(item.id)) {
         map.set(item.id, {
@@ -85,7 +106,7 @@ export default function CzechRegionsMap({
       }
     }
     return map
-  }, [catalog])
+  }, [catalog, allRegions])
 
   const hovered = hoveredId ? regionById.get(hoveredId) : null
   const hoveredValue = hovered ? values[hovered.id] : ''
@@ -108,15 +129,15 @@ export default function CzechRegionsMap({
 
   function renderKrajOrder() {
     const liftId =
-      hoveredId && !EXTRA_REGION_IDS.has(hoveredId)
+      hoveredId && !extraIds.has(hoveredId)
         ? hoveredId
-        : selectedId && !EXTRA_REGION_IDS.has(selectedId)
+        : selectedId && !extraIds.has(selectedId)
           ? selectedId
           : ''
-    if (!liftId) return DEFAULT_CZECH_REGIONS
-    const rest = DEFAULT_CZECH_REGIONS.filter((region) => region.id !== liftId)
-    const lifted = DEFAULT_CZECH_REGIONS.find((region) => region.id === liftId)
-    return lifted ? [...rest, lifted] : DEFAULT_CZECH_REGIONS
+    if (!liftId) return defaultRegions
+    const rest = defaultRegions.filter((region) => region.id !== liftId)
+    const lifted = defaultRegions.find((region) => region.id === liftId)
+    return lifted ? [...rest, lifted] : defaultRegions
   }
 
   function renderRegionInteraction(region, isExtra = false) {
@@ -190,7 +211,9 @@ export default function CzechRegionsMap({
     <div className="targets-map-panel">
       <section className="targets-overall-completion" aria-label="Celkově splněno">
         <div className="targets-overall-copy">
-          <span className="targets-overall-label">Celkově splněno</span>
+          <span className="targets-overall-label">
+            Celkově splněno{isSk ? ' · SK' : ''}
+          </span>
           <strong className="targets-overall-pct">
             {formatPercent(overallTarget, overallCompleted)}
           </strong>
@@ -208,7 +231,9 @@ export default function CzechRegionsMap({
       </section>
 
       <p className="targets-map-hint">
-        Klikněte na kraj nebo Benešov na mapě. Splněno se načítá z ERP podle data zaměření.
+        {isSk
+          ? 'Klikněte na mapu Slovenska (region sk). Celkový target pod mapou = SK.'
+          : 'Klikněte na kraj nebo Benešov na mapě. Splněno se načítá z ERP podle data zaměření.'}
       </p>
       <div className="targets-map-tooltip" aria-live="polite">
         {hovered ? (
@@ -225,28 +250,36 @@ export default function CzechRegionsMap({
             </span>
           </>
         ) : (
-          <span>Najeďte myší na kraj — zobrazí se cíl, splněno a %</span>
+          <span>
+            {isSk
+              ? 'Najeďte myší na Slovensko — zobrazí se cíl, splněno a %'
+              : 'Najeďte myší na kraj — zobrazí se cíl, splněno a %'}
+          </span>
         )}
       </div>
       <svg
         className="targets-map-svg"
-        viewBox={MAP_VIEWBOX}
+        viewBox={mapViewBox}
         role="img"
-        aria-label="Mapa krajů České republiky"
+        aria-label={isSk ? 'Mapa Slovenska' : 'Mapa krajů České republiky'}
       >
         <g className="targets-map-kraje-layer">
           {renderKrajOrder().map((region) => renderRegionInteraction(region, false))}
         </g>
-        <g className="targets-map-extra-layer">
-          {EXTRA_REGIONS.map((region) => renderRegionInteraction(region, true))}
-        </g>
+        {extraRegions.length ? (
+          <g className="targets-map-extra-layer">
+            {extraRegions.map((region) => renderRegionInteraction(region, true))}
+          </g>
+        ) : null}
       </svg>
 
       {selected ? (
         <div className="targets-map-editor" aria-label={`Úprava targetu pro ${selected.name}`}>
           <div className="targets-map-editor-head">
             <div>
-              <span className="targets-map-editor-kicker">Cíl kraje</span>
+              <span className="targets-map-editor-kicker">
+                {isSk ? 'Cíl SK' : 'Cíl kraje'}
+              </span>
               <strong>{selected.name}</strong>
             </div>
             <button
@@ -300,7 +333,11 @@ export default function CzechRegionsMap({
           </label>
         </div>
       ) : (
-        <p className="targets-map-editor-empty">Vyberte kraj nebo Benešov kliknutím na mapu.</p>
+        <p className="targets-map-editor-empty">
+          {isSk
+            ? 'Vyberte Slovensko (sk) kliknutím na mapu.'
+            : 'Vyberte kraj nebo Benešov kliknutím na mapu.'}
+        </p>
       )}
     </div>
   )

@@ -34,7 +34,7 @@ export default async function handler(req, res) {
       rangeStart,
       rangeEnd
     ])
-    const metrics = normalizeIncomingLineSummary(result.rows[0] || {})
+    const metrics = normalizeIncomingLineSummary(result.rows[0] || {}, { brandId })
     const queueBreakdown = await fetchQueueBreakdown({
       brandId,
       startDate: rangeStart,

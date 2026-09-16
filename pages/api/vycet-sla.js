@@ -2,9 +2,11 @@
  * KPI Výčet SLA
  * - business datum: přišlo / navoláno / chybí / splněno
  * - kalendářní datum (+2h): poptávky / SLA 24·48·72 + %
+ * Volitelný filtr značky: ?brand=cz|sk|… → orders.organization_id
  */
 
 import { getPool } from '@/lib/db-esm'
+import { resolveOrganizationId } from '@/lib/operations-brands'
 import {
   BUSINESS_DATE_SQL,
   CALENDAR_DATE_SQL,
@@ -13,10 +15,12 @@ import {
   SLA48_FLAG_SQL,
   SLA72_FLAG_SQL,
   SLA_BASE_FILTERS_SQL,
-  SLA_POPTAVKY_FILTERS_SQL,
   SLA_POPTAVKY_FROM_SQL,
+  appendOrganizationFilter,
+  buildSlaPoptavkyFiltersSql,
   formatSlaPercent,
-  resolveSlaRange
+  resolveSlaRange,
+  shouldExcludeVenkovkyReason
 } from '@/lib/sla-metrics'
 
 export default async function handler(req, res) {
@@ -30,9 +34,31 @@ export default async function handler(req, res) {
   }
 
   const period = typeof req.query.period === 'string' ? req.query.period : 'month'
+  const brandId = typeof req.query.brand === 'string' ? req.query.brand : ''
+  const organizationId = resolveOrganizationId({
+    brandId,
+    organizationId: req.query.organizationId
+  })
+  const requireBrand =
+    Boolean(brandId) ||
+    (req.query.organizationId != null && String(req.query.organizationId).trim() !== '')
+
+  if (requireBrand && organizationId == null) {
+    return res.status(400).json({
+      error:
+        'Chybí organization_id (company ID) pro zvolenou značku. Doplňte ho v lib/operations-brands.js.'
+    })
+  }
 
   try {
     const { start, end } = resolveSlaRange(req.query)
+    const excludeVenkovky = shouldExcludeVenkovkyReason(organizationId, brandId)
+    const poptavkyFilters = buildSlaPoptavkyFiltersSql({
+      excludeVenkovkyReason: excludeVenkovky
+    })
+
+    const businessBase = appendOrganizationFilter([start, end], organizationId)
+    const calendarBase = appendOrganizationFilter([start, end], organizationId)
 
     const [businessResult, calendarResult] = await Promise.all([
       pool.query(
@@ -44,8 +70,9 @@ export default async function handler(req, res) {
         WHERE (${BUSINESS_DATE_SQL}) >= $1::date
           AND (${BUSINESS_DATE_SQL}) <= $2::date
           ${SLA_BASE_FILTERS_SQL}
+          ${businessBase.sql}
         `,
-        [start, end]
+        businessBase.params
       ),
       pool.query(
         `
@@ -57,9 +84,10 @@ export default async function handler(req, res) {
         ${SLA_POPTAVKY_FROM_SQL}
         WHERE (${CALENDAR_DATE_SQL}) >= $1::date
           AND (${CALENDAR_DATE_SQL}) <= $2::date
-          ${SLA_POPTAVKY_FILTERS_SQL}
+          ${poptavkyFilters}
+          ${calendarBase.sql}
         `,
-        [start, end]
+        calendarBase.params
       )
     ])
 
@@ -74,6 +102,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       period,
+      brand: brandId || null,
+      organization_id: organizationId,
       start: start.toISOString(),
       end: end.toISOString(),
       metrics: {

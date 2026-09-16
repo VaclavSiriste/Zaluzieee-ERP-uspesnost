@@ -110,7 +110,6 @@ function readSheetRows_(sheet) {
 function analyze_(rows, startDate, endDate) {
   var techNames = [];
   var techSeen = {};
-  var total = 0;
   var ano = 0;
   var ne = 0;
   var completedTotal = 0;
@@ -154,18 +153,18 @@ function analyze_(rows, startDate, endDate) {
     if (startDate && dateStr < startDate) continue;
     if (endDate && dateStr > endDate) continue;
 
-    total++;
     var dopadl = String(row[COL_DOPADL - 1] || '').trim().toLowerCase();
     dopadl = dopadl
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
     if (dopadl === 'ano' || dopadl === 'yes' || dopadl === '1' || dopadl === 'true') {
       ano++;
-    } else if (String(row[COL_DOPADL - 1] || '').trim()) {
+    } else if (dopadl === 'ne' || dopadl === 'no' || dopadl === '0' || dopadl === 'false') {
       ne++;
     }
   }
 
+  var decided = ano + ne;
   techNames.sort(function (a, b) {
     return a.name.localeCompare(b.name, 'cs');
   });
@@ -175,8 +174,8 @@ function analyze_(rows, startDate, endDate) {
     success: {
       dopadl_hovor_ano: ano,
       dopadl_hovor_ne: ne,
-      dopadl_hovor_pocet: total,
-      success_navolani_pct: total > 0 ? (ano / total) * 100 : null,
+      dopadl_hovor_pocet: decided,
+      success_navolani_pct: decided > 0 ? (ano / decided) * 100 : null,
       domluveno_zamereni_ano: 0,
       domluveno_zamereni_ne: 0,
       domluveno_zamereni_pocet: 0,

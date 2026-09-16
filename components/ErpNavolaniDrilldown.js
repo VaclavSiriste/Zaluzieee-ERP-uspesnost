@@ -93,7 +93,7 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
             <h2 id="erp-navolani-drilldown-title">{title}</h2>
             <p className="drilldown-subtitle">
               ERP · organizace {data?.organization_id != null ? `č. ${data.organization_id}` : '—'} ·
-              Naplánován termín zaměření / Dopadl hovor · filtr podle data navolání
+              Dopadl hovor ANO / (ANO + NE) · filtr podle data navolání
             </p>
             {data ? (
               <p className="drilldown-meta">
