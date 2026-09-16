@@ -14,7 +14,7 @@ import {
   writeSelectedMonthKey,
   writeTargetsView
 } from '@/lib/targets-storage'
-import { syncTargetsCompletedFromErp } from '@/lib/sync-targets-completed'
+import { syncTargetsCompletedFromErp, syncTargetsCompletedFromOvtSheet } from '@/lib/sync-targets-completed'
 import { sortTechnicians, technicianId } from '@/lib/technician-targets'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 
@@ -100,9 +100,12 @@ export default function OperationsTargetsPanel({
   brandId = 'cz',
   organizationId = null,
   brandLabel = 'zaluzieee - CZ',
-  sheetTechnicians = null
+  sheetTechnicians = null,
+  /** 'erp' | 'ovt-sheet' — pokladamee bere techniky + splněno ze sheetu */
+  completedSource = 'erp'
 }) {
   const targetsBrandId = brandId
+  const fromOvtSheet = completedSource === 'ovt-sheet'
   const [monthKey, setMonthKey] = useState('')
   const [bucket, setBucket] = useState(null)
   const [expanded, setExpanded] = useState(false)
@@ -111,9 +114,11 @@ export default function OperationsTargetsPanel({
 
   const monthOptions = useMemo(() => listMonthOptions(), [])
 
-  /** OVT sheet (pokladamee): jména techniků ze sloupce Q → katalog targetů */
+  /** OVT sheet: jména techniků ze sloupce Q → nahradí ERP katalog */
   useEffect(() => {
-    if (!Array.isArray(sheetTechnicians) || !sheetTechnicians.length || !monthKey) return
+    if (!fromOvtSheet || !Array.isArray(sheetTechnicians) || !sheetTechnicians.length || !monthKey) {
+      return
+    }
     const incoming = sheetTechnicians
       .map((item) => ({
         id: item.id || technicianId(item.name),
@@ -124,47 +129,48 @@ export default function OperationsTargetsPanel({
 
     setBucket((current) => {
       if (!current?.technicians) return current
-      const byId = new Map((current.technicians.catalog || []).map((item) => [item.id, item]))
-      let changed = false
-      for (const tech of incoming) {
-        if (!byId.has(tech.id)) {
-          byId.set(tech.id, tech)
-          changed = true
-        }
+      const catalog = sortTechnicians(incoming)
+      const activeIds = catalog.map((item) => item.id)
+      const prevValues = current.technicians.values || {}
+      const values = {}
+      for (const tech of catalog) {
+        if (prevValues[tech.id] != null) values[tech.id] = prevValues[tech.id]
       }
-      if (!changed) return current
-
-      const catalog = sortTechnicians(Array.from(byId.values()))
-      const activeIds = Array.from(
-        new Set([...(current.technicians.activeIds || []), ...incoming.map((item) => item.id)])
-      )
       const next = {
         ...current,
         technicians: {
           ...current.technicians,
           catalog,
-          activeIds
+          activeIds,
+          values
         }
       }
       writeMonthBucket(monthKey, next, targetsBrandId)
       return next
     })
-  }, [sheetTechnicians, monthKey, targetsBrandId])
+  }, [sheetTechnicians, monthKey, targetsBrandId, fromOvtSheet])
 
-  async function reloadBucket(key = monthKey, syncErp = false) {
+  async function reloadBucket(key = monthKey, syncRemote = false) {
     if (!key) return
     const initial = readMonthBucket(key, targetsBrandId)
-    if (!syncErp) {
+    if (!syncRemote) {
       setBucket(initial)
       return
     }
     setErpSyncing(true)
     try {
-      const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
-        organizationId,
-        brandId: targetsBrandId
-      })
-      setBucket(synced)
+      if (fromOvtSheet) {
+        const { bucket: synced } = await syncTargetsCompletedFromOvtSheet(key, initial, {
+          brandId: targetsBrandId
+        })
+        setBucket(synced)
+      } else {
+        const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
+          organizationId,
+          brandId: targetsBrandId
+        })
+        setBucket(synced)
+      }
     } catch {
       setBucket(initial)
     } finally {
@@ -177,7 +183,7 @@ export default function OperationsTargetsPanel({
     setMonthKey(month)
     setView(readTargetsView())
     reloadBucket(month, true)
-  }, [targetsBrandId, organizationId])
+  }, [targetsBrandId, organizationId, completedSource])
 
   useEffect(() => {
     if (!monthKey) return undefined
@@ -230,7 +236,7 @@ export default function OperationsTargetsPanel({
   const displayTarget =
     String(operations?.target || '').trim() ||
     (breakdownTarget != null ? String(breakdownTarget) : '')
-  // Splněno celkem: jen ERP počet zakázek s datum_zamereni v měsíci (ne součet techniků/krajů)
+  // Splněno celkem: počet řádků s datum_zamereni v měsíci (ERP nebo OVT sheet)
   const displayCompleted = String(operations?.completed || '').trim()
 
   const summaryPct = computeProgressPct(displayTarget, displayCompleted)
@@ -261,11 +267,17 @@ export default function OperationsTargetsPanel({
       </h2>
       <p className="sla-block-desc">
         {expanded
-          ? `Cíl zadáte ručně. Splněno = počet naplánovaných zaměření (datum_zamereni) v měsíci z ERP${
-              organizationId != null ? ` · organizace č. ${organizationId}` : ''
-            }.`
+          ? fromOvtSheet
+            ? 'Cíl zadáte ručně. Technici = sloupec Q (OVT). Splněno = počet řádků s Datum zaměření (P) ve zvoleném měsíci ze sheetu.'
+            : `Cíl zadáte ručně. Splněno = počet naplánovaných zaměření (datum_zamereni) v měsíci z ERP${
+                organizationId != null ? ` · organizace č. ${organizationId}` : ''
+              }.`
           : 'Klikněte pro rozpad targetů — kraje a technici.'}
-        {erpSyncing ? ' · Načítám splněno z ERP…' : ''}
+        {erpSyncing
+          ? fromOvtSheet
+            ? ' · Načítám techniky a splněno ze sheetu…'
+            : ' · Načítám splněno z ERP…'
+          : ''}
       </p>
 
       <button

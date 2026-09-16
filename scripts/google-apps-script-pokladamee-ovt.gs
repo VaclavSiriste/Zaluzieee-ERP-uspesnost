@@ -11,7 +11,8 @@
  * 4) URL nasazení dej do Prvni/.env jako POKLADAMEE_OVT_SHEET_WEBAPP_URL
  *    a stejný token jako POKLADAMEE_OVT_SHEET_TOKEN
  *
- * Sloupce: K = datum navolání, L = dopadl hovor, Q = technik (OVT)
+ * Sloupce: K = datum navolání, L = dopadl hovor, P = datum zaměření,
+ *          Q = OVT technik, U = kraj
  * Řádek 2 = nadpis, data od řádku 3.
  */
 
@@ -21,7 +22,9 @@ var SHEET_GID = 1262379590;
 var DATA_START_ROW = 3;
 var COL_DATUM = 11; // K
 var COL_DOPADL = 12; // L
+var COL_DATUM_ZAMERENI = 16; // P
 var COL_TECHNIK = 17; // Q
+var COL_KRAJ = 21; // U
 
 function doGet(e) {
   try {
@@ -52,7 +55,8 @@ function doGet(e) {
       startDate: startDate || null,
       endDate: endDate || null,
       technicians: analyzed.technicians,
-      success: analyzed.success
+      success: analyzed.success,
+      targets: analyzed.targets
     });
   } catch (err) {
     return json_({ error: String(err && err.message ? err.message : err) }, 500);
@@ -91,7 +95,7 @@ function getTargetSheet_() {
 
 function readSheetRows_(sheet) {
   var lastRow = Math.max(sheet.getLastRow(), 1);
-  var lastCol = Math.max(sheet.getLastColumn(), COL_TECHNIK);
+  var lastCol = Math.max(sheet.getLastColumn(), COL_KRAJ);
   return sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
 }
 
@@ -101,18 +105,39 @@ function analyze_(rows, startDate, endDate) {
   var total = 0;
   var ano = 0;
   var ne = 0;
+  var completedTotal = 0;
+  var completedByTech = {};
+  var completedByRegion = {};
 
   for (var i = DATA_START_ROW - 1; i < rows.length; i++) {
     var row = rows[i] || [];
     var tech = String(row[COL_TECHNIK - 1] || '').trim().replace(/\s+/g, ' ');
+    var techId = '';
     if (tech) {
-      var key = tech.toLowerCase();
-      if (!techSeen[key]) {
-        techSeen[key] = true;
+      techId = slug_(tech);
+      if (!techSeen[techId]) {
+        techSeen[techId] = true;
         techNames.push({
-          id: slug_(tech),
+          id: techId,
           name: tech
         });
+      }
+    }
+
+    var zamereniDate = parseDate_(row[COL_DATUM_ZAMERENI - 1]);
+    if (zamereniDate) {
+      var inZam =
+        (!startDate || zamereniDate >= startDate) && (!endDate || zamereniDate <= endDate);
+      if (inZam) {
+        completedTotal++;
+        if (techId) {
+          completedByTech[techId] = (completedByTech[techId] || 0) + 1;
+        }
+        var kraj = String(row[COL_KRAJ - 1] || '').trim();
+        if (kraj) {
+          var krajId = slug_(kraj);
+          completedByRegion[krajId] = (completedByRegion[krajId] || 0) + 1;
+        }
       }
     }
 
@@ -150,6 +175,16 @@ function analyze_(rows, startDate, endDate) {
       by_operator: [],
       source: 'pokladamee-ovt-sheet',
       date_basis: 'datum_navolani'
+    },
+    targets: {
+      source: 'pokladamee-ovt-sheet',
+      date_basis: 'datum_zamereni',
+      technicians: techNames,
+      completed: {
+        total: completedTotal,
+        technicians: completedByTech,
+        regions: completedByRegion
+      }
     }
   };
 }

@@ -1,5 +1,5 @@
 /**
- * Pokladamee OVT sheet — technici (Q) + úspěšnost dopadl hovor (L) dle data navolání (K)
+ * Pokladamee OVT sheet — technici (Q) + úspěšnost (L/K) + targety (P datum zaměření)
  * GET /api/pokladamee-ovt-sheet?period=&startDate=&endDate=
  */
 
@@ -48,6 +48,7 @@ export default async function handler(req, res) {
       fetch_source: data.fetch_source,
       technicians: data.technicians,
       metrics: data.success,
+      targets: data.targets,
       source: 'pokladamee-ovt-sheet'
     })
   } catch (error) {

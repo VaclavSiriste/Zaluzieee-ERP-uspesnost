@@ -625,6 +625,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               organizationId={brand.organizationId}
               brandLabel={brand.pageTitle}
               sheetTechnicians={brand.navolaniSource === 'ovt-sheet' ? sheetTechnicians : null}
+              completedSource={brand.navolaniSource === 'ovt-sheet' ? 'ovt-sheet' : 'erp'}
             />
           ) : null}
         </div>
