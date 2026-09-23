@@ -51,6 +51,10 @@ export default async function handler(req, res) {
     MAX_LIMIT
   )
   const parsedOffset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0)
+  const duvodReason =
+    typeof req.query.duvodReason === 'string' && req.query.duvodReason.trim()
+      ? req.query.duvodReason.trim()
+      : null
 
   try {
     const { start, end } = resolveDateRange({ startDate, endDate, period })
@@ -59,6 +63,7 @@ export default async function handler(req, res) {
       start,
       end,
       organizationId,
+      duvodReason,
       limit: parsedLimit,
       offset: parsedOffset
     })
@@ -68,6 +73,7 @@ export default async function handler(req, res) {
       brand: brandId,
       organization_id: organizationId,
       metric,
+      duvod_reason: result.duvod_reason || null,
       label: result.label,
       start: start.toISOString(),
       end: end.toISOString(),

@@ -85,7 +85,8 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
           ...(filters.brand ? { brand: filters.brand } : {}),
           ...(filters.startDate ? { startDate: filters.startDate } : {}),
           ...(filters.endDate ? { endDate: filters.endDate } : {}),
-          ...(drilldown.brand ? { brand: drilldown.brand } : {})
+          ...(drilldown.brand ? { brand: drilldown.brand } : {}),
+          ...(drilldown.duvodReason ? { duvodReason: drilldown.duvodReason } : {})
         })
         const response = await fetch(`/api/trasovac-response-orders?${params}`)
         const payload = await response.json()
@@ -180,6 +181,7 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
                         <th>Nastavení stavu (datum + čas)</th>
                         <th>První změna (datum + čas)</th>
                         <th>Doba (rozdíl)</th>
+                        <th>Důvod ne</th>
                         <th>Co se změnilo</th>
                         <th>Zákazník</th>
                         <th>Kraj</th>
@@ -195,6 +197,7 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
                           <td>
                             <strong>{formatHours(order.hours_to_response)}</strong>
                           </td>
+                          <td>{order.duvod_ne_label || 'Bez důvodu ne'}</td>
                           <td>{formatFirstChange(order)}</td>
                           <td>{order.customer_name || '—'}</td>
                           <td>{order.region || '—'}</td>

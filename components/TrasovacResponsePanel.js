@@ -35,13 +35,14 @@ export default function TrasovacResponsePanel({
   if (!metrics) return null
 
   const grace = metrics.grace_minutes || 15
+  const duvodBreakdown = Array.isArray(metrics.duvod_breakdown) ? metrics.duvod_breakdown : []
   const orgHint =
     organizationId != null
       ? `ERP · organizace č. ${organizationId} (${brandLabel})`
       : `ERP · ${brandLabel}`
 
-  function openMetric(metric, title) {
-    if (typeof onOpenMetric === 'function') onOpenMetric(metric, title)
+  function openMetric(metric, title, duvodReason = null) {
+    if (typeof onOpenMetric === 'function') onOpenMetric(metric, title, duvodReason)
   }
 
   return (
@@ -87,54 +88,84 @@ export default function TrasovacResponsePanel({
       </button>
 
       {expanded ? (
-        <div className="sla-kpi-breakdown" aria-label="Rozpad fronty trasovačů">
-          <article className="sla-kpi sla-kpi-child sla-kpi-accent">
-            <MetricLabel helpId="trasovac_waiting">Čeká na trasovače</MetricLabel>
-            <DrilldownCount
-              count={metrics.waiting_now}
-              className="sla-kpi-value"
-              title="Aktuální fronta — kliknutím seznam"
-              onOpen={() => openMetric('waiting', 'Čeká na trasovače (aktuálně)')}
-            />
-            <span className="sla-kpi-hint">aktuální stav · snapshot</span>
-          </article>
-          <article className="sla-kpi sla-kpi-child">
-            <MetricLabel helpId="trasovac_avg">Průměr</MetricLabel>
-            <DrilldownCount
-              count={metrics.with_response}
-              text={formatHours(metrics.avg_hours)}
-              className="sla-kpi-value"
-              title="Leady s reakcí — vstup a čas první změny"
-              onOpen={() => openMetric('avg', 'Průměr — leady s reakcí')}
-            />
-            <span className="sla-kpi-hint">
-              vstup → první změna v logu (≥ {grace} min)
-            </span>
-          </article>
-          <article className="sla-kpi sla-kpi-child">
-            <MetricLabel helpId="trasovac_median">Medián</MetricLabel>
-            <DrilldownCount
-              count={metrics.with_response}
-              text={formatHours(metrics.median_hours)}
-              className="sla-kpi-value"
-              title="Leady s reakcí — vstup a čas první změny"
-              onOpen={() => openMetric('median', 'Medián — leady s reakcí')}
-            />
-            <span className="sla-kpi-hint">
-              {formatNumber(metrics.with_response)} leadů s reakcí ve filtru
-            </span>
-          </article>
-          <article className="sla-kpi sla-kpi-child">
-            <span className="sla-kpi-label">Vešlo do fronty</span>
-            <DrilldownCount
-              count={metrics.entered_in_period}
-              className="sla-kpi-value"
-              title="Všechny vstupy do stavu ve filtru"
-              onOpen={() => openMetric('entered', 'Vešlo do fronty')}
-            />
-            <span className="sla-kpi-hint">status → čeká na trasovače · období filtru</span>
-          </article>
-        </div>
+        <>
+          <div className="sla-kpi-breakdown" aria-label="Rozpad fronty trasovačů">
+            <article className="sla-kpi sla-kpi-child sla-kpi-accent">
+              <MetricLabel helpId="trasovac_waiting">Čeká na trasovače</MetricLabel>
+              <DrilldownCount
+                count={metrics.waiting_now}
+                className="sla-kpi-value"
+                title="Aktuální fronta — kliknutím seznam"
+                onOpen={() => openMetric('waiting', 'Čeká na trasovače (aktuálně)')}
+              />
+              <span className="sla-kpi-hint">aktuální stav · snapshot</span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <MetricLabel helpId="trasovac_avg">Průměr</MetricLabel>
+              <DrilldownCount
+                count={metrics.with_response}
+                text={formatHours(metrics.avg_hours)}
+                className="sla-kpi-value"
+                title="Leady s reakcí — vstup a čas první změny"
+                onOpen={() => openMetric('avg', 'Průměr — leady s reakcí')}
+              />
+              <span className="sla-kpi-hint">
+                vstup → první změna v logu (≥ {grace} min)
+              </span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <MetricLabel helpId="trasovac_median">Medián</MetricLabel>
+              <DrilldownCount
+                count={metrics.with_response}
+                text={formatHours(metrics.median_hours)}
+                className="sla-kpi-value"
+                title="Leady s reakcí — vstup a čas první změny"
+                onOpen={() => openMetric('median', 'Medián — leady s reakcí')}
+              />
+              <span className="sla-kpi-hint">
+                {formatNumber(metrics.with_response)} leadů s reakcí ve filtru
+              </span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <span className="sla-kpi-label">Vešlo do fronty</span>
+              <DrilldownCount
+                count={metrics.entered_in_period}
+                className="sla-kpi-value"
+                title="Všechny vstupy do stavu ve filtru"
+                onOpen={() => openMetric('entered', 'Vešlo do fronty')}
+              />
+              <span className="sla-kpi-hint">status → čeká na trasovače · období filtru</span>
+            </article>
+          </div>
+
+          {duvodBreakdown.length > 0 ? (
+            <div
+              className="sla-kpi-breakdown"
+              aria-label="Rozpad Důvod ne — aktuální fronta"
+              style={{ marginTop: '0.75rem' }}
+            >
+              <article className="sla-kpi sla-kpi-child" style={{ gridColumn: '1 / -1' }}>
+                <MetricLabel helpId="trasovac_duvod">Důvod ne · aktuální fronta</MetricLabel>
+                <span className="sla-kpi-hint">
+                  ERP sloupec „Důvod ne“ (proc_nedopadl_hovor) u leadů ve stavu Čeká na trasovače
+                </span>
+              </article>
+              {duvodBreakdown.map((item) => (
+                <article key={item.key} className="sla-kpi sla-kpi-child">
+                  <span className="sla-kpi-label">{item.label}</span>
+                  <DrilldownCount
+                    count={item.count}
+                    className="sla-kpi-value"
+                    title={`${item.label} — kliknutím seznam`}
+                    onOpen={() =>
+                      openMetric('waiting', `Čeká na trasovače · ${item.label}`, item.key)
+                    }
+                  />
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </section>
   )

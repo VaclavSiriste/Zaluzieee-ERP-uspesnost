@@ -419,8 +419,8 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     setVycetSlaDrilldown({ metric, title })
   }
 
-  function openTrasovacMetric(metric, title) {
-    setTrasovacDrilldown({ metric, title, brand: brand.id })
+  function openTrasovacMetric(metric, title, duvodReason = null) {
+    setTrasovacDrilldown({ metric, title, brand: brand.id, duvodReason })
   }
 
   function openCallbackDrilldown(variant, title, subtitle, hoursAxis = 'all') {
