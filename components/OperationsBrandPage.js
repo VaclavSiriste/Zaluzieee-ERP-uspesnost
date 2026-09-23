@@ -9,6 +9,7 @@ import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
 import SlaDrilldown from '@/components/SlaDrilldown'
+import TrasovacResponseDrilldown from '@/components/TrasovacResponseDrilldown'
 import TrasovacResponsePanel from '@/components/TrasovacResponsePanel'
 import VycetSlaPanel from '@/components/VycetSlaPanel'
 import { OPERATIONS_BRANDS } from '@/lib/operations-brands'
@@ -166,6 +167,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [trasovacLoading, setTrasovacLoading] = useState(true)
   const [trasovacError, setTrasovacError] = useState('')
   const [trasovacOpen, setTrasovacOpen] = useState(false)
+  const [trasovacDrilldown, setTrasovacDrilldown] = useState(null)
 
   const filters = useMemo(
     () => ({
@@ -415,6 +417,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
 
   function openVycetSlaMetric(metric, title) {
     setVycetSlaDrilldown({ metric, title })
+  }
+
+  function openTrasovacMetric(metric, title) {
+    setTrasovacDrilldown({ metric, title, brand: brand.id })
   }
 
   function openCallbackDrilldown(variant, title, subtitle, hoursAxis = 'all') {
@@ -877,6 +883,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               metrics={trasovacMetrics}
               expanded={trasovacOpen}
               onToggle={() => setTrasovacOpen((open) => !open)}
+              onOpenMetric={openTrasovacMetric}
               brandLabel={brand.pageTitle}
               organizationId={brand.organizationId}
             />
@@ -938,6 +945,13 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
         onClose={() => setVycetSlaDrilldown(null)}
         drilldown={vycetSlaDrilldown}
         filters={vycetSlaFilters}
+      />
+
+      <TrasovacResponseDrilldown
+        open={Boolean(trasovacDrilldown)}
+        onClose={() => setTrasovacDrilldown(null)}
+        drilldown={trasovacDrilldown}
+        filters={filters}
       />
     </main>
   )

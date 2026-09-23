@@ -1,3 +1,4 @@
+import DrilldownCount from '@/components/DrilldownCount'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 
 function formatHours(value) {
@@ -27,6 +28,7 @@ export default function TrasovacResponsePanel({
   metrics,
   expanded,
   onToggle,
+  onOpenMetric,
   brandLabel = 'zaluzieee - CZ',
   organizationId = null
 }) {
@@ -38,6 +40,10 @@ export default function TrasovacResponsePanel({
       ? `ERP · organizace č. ${organizationId} (${brandLabel})`
       : `ERP · ${brandLabel}`
 
+  function openMetric(metric, title) {
+    if (typeof onOpenMetric === 'function') onOpenMetric(metric, title)
+  }
+
   return (
     <section
       className={`sla-block sla-block-nested sla-block-trasovac${expanded ? ' is-expanded' : ''}`}
@@ -48,7 +54,7 @@ export default function TrasovacResponsePanel({
       </h2>
       <p className="sla-block-desc">
         {orgHint}. Aktuální počet ve stavu „Čeká na trasovače“ a doba do první změny v logu (grace{' '}
-        {grace} min po vstupu do stavu).
+        {grace} min po vstupu do stavu). Klikněte na číslo pro seznam leadů.
       </p>
 
       <button
@@ -60,7 +66,13 @@ export default function TrasovacResponsePanel({
         <MetricLabel helpId="trasovac_avg" className="sla-kpi-label">
           Průměrná doba do reakce trasovače
         </MetricLabel>
-        <strong className="sla-kpi-value">{formatHours(metrics.avg_hours)}</strong>
+        <DrilldownCount
+          count={metrics.with_response}
+          text={formatHours(metrics.avg_hours)}
+          className="sla-kpi-value"
+          title="Kliknutím zobrazíte leady s reakcí (vstup + první změna)"
+          onOpen={() => openMetric('with_response', 'Leady s reakcí trasovače')}
+        />
         <span className="sla-kpi-hint">
           medián {formatHours(metrics.median_hours)}
           {' · '}
@@ -78,26 +90,48 @@ export default function TrasovacResponsePanel({
         <div className="sla-kpi-breakdown" aria-label="Rozpad fronty trasovačů">
           <article className="sla-kpi sla-kpi-child sla-kpi-accent">
             <MetricLabel helpId="trasovac_waiting">Čeká na trasovače</MetricLabel>
-            <strong className="sla-kpi-value">{formatNumber(metrics.waiting_now)}</strong>
+            <DrilldownCount
+              count={metrics.waiting_now}
+              className="sla-kpi-value"
+              title="Aktuální fronta — kliknutím seznam"
+              onOpen={() => openMetric('waiting', 'Čeká na trasovače (aktuálně)')}
+            />
             <span className="sla-kpi-hint">aktuální stav · snapshot</span>
           </article>
           <article className="sla-kpi sla-kpi-child">
             <MetricLabel helpId="trasovac_avg">Průměr</MetricLabel>
-            <strong className="sla-kpi-value">{formatHours(metrics.avg_hours)}</strong>
+            <DrilldownCount
+              count={metrics.with_response}
+              text={formatHours(metrics.avg_hours)}
+              className="sla-kpi-value"
+              title="Leady s reakcí — vstup a čas první změny"
+              onOpen={() => openMetric('avg', 'Průměr — leady s reakcí')}
+            />
             <span className="sla-kpi-hint">
               vstup → první změna v logu (≥ {grace} min)
             </span>
           </article>
           <article className="sla-kpi sla-kpi-child">
             <MetricLabel helpId="trasovac_median">Medián</MetricLabel>
-            <strong className="sla-kpi-value">{formatHours(metrics.median_hours)}</strong>
+            <DrilldownCount
+              count={metrics.with_response}
+              text={formatHours(metrics.median_hours)}
+              className="sla-kpi-value"
+              title="Leady s reakcí — vstup a čas první změny"
+              onOpen={() => openMetric('median', 'Medián — leady s reakcí')}
+            />
             <span className="sla-kpi-hint">
               {formatNumber(metrics.with_response)} leadů s reakcí ve filtru
             </span>
           </article>
           <article className="sla-kpi sla-kpi-child">
             <span className="sla-kpi-label">Vešlo do fronty</span>
-            <strong className="sla-kpi-value">{formatNumber(metrics.entered_in_period)}</strong>
+            <DrilldownCount
+              count={metrics.entered_in_period}
+              className="sla-kpi-value"
+              title="Všechny vstupy do stavu ve filtru"
+              onOpen={() => openMetric('entered', 'Vešlo do fronty')}
+            />
             <span className="sla-kpi-hint">status → čeká na trasovače · období filtru</span>
           </article>
         </div>
