@@ -616,17 +616,6 @@ export default function OperatorPausesPage() {
               <div className="pauses-hero-actions">
                 <button
                   type="button"
-                  className="pauses-sync-btn"
-                  onClick={handleSyncData}
-                  disabled={syncBusy || syncState === 'running'}
-                  aria-busy={syncBusy || syncState === 'running'}
-                >
-                  {syncState === 'running'
-                    ? `Aktualizuji… ${syncProgress?.percent ?? 0} %`
-                    : 'Aktualizovat data'}
-                </button>
-                <button
-                  type="button"
                   className="pauses-directory-btn"
                   onClick={() => setDirectoryOpen(true)}
                 >
@@ -638,80 +627,6 @@ export default function OperatorPausesPage() {
               </div>
 
               <OperatorsAccessPanel />
-
-              {(syncState === 'running' ||
-                syncState === 'error' ||
-                (syncState === 'success' && syncProgress)) && (
-                <div
-                  className={`pauses-sync-panel${syncState === 'running' ? ' is-running' : ''}${
-                    syncState === 'error' ? ' is-error' : ''
-                  }`}
-                  aria-live="polite"
-                >
-                  <div className="pauses-sync-panel-top">
-                    <strong>
-                      {syncState === 'running'
-                        ? syncProgress?.currentLabel
-                          ? `Stahuji: ${syncProgress.currentLabel}`
-                          : 'Synchronizace běží…'
-                        : syncState === 'error'
-                          ? 'Sync se nepodařil'
-                          : syncMessage || 'Poslední sync'}
-                    </strong>
-                    <span>
-                      {syncProgress
-                        ? `${syncProgress.doneSteps || 0} / ${syncProgress.totalSteps || 0} tabulek`
-                        : ''}
-                      {syncProgress?.remainingSteps > 0 && syncState === 'running'
-                        ? ` · zbývá ${syncProgress.remainingSteps}`
-                        : ''}
-                    </span>
-                  </div>
-                  {syncState === 'running' ? (
-                    <div className="pauses-sync-bar" aria-hidden="true">
-                      <div
-                        className="pauses-sync-bar-fill"
-                        style={{
-                          width: `${Math.max(0, Math.min(100, syncProgress?.percent || 0))}%`
-                        }}
-                      />
-                    </div>
-                  ) : null}
-                  {syncState === 'running' && syncProgress?.page?.total != null ? (
-                    <p className="pauses-sync-detail">
-                      Stránka {syncProgress.page.page} ·{' '}
-                      {Number(syncProgress.page.offset || 0).toLocaleString('cs-CZ')} /{' '}
-                      {Number(syncProgress.page.total || 0).toLocaleString('cs-CZ')}
-                      {syncProgress.page.remaining != null
-                        ? ` · zbývá ${Number(syncProgress.page.remaining).toLocaleString('cs-CZ')} záznamů`
-                        : ''}
-                    </p>
-                  ) : syncMessage ? (
-                    <p className="pauses-sync-detail">{syncMessage}</p>
-                  ) : null}
-                  {Array.isArray(syncProgress?.steps) && syncProgress.steps.length > 0 ? (
-                    <ul className="pauses-sync-steps">
-                      {syncProgress.steps.map((step) => (
-                        <li
-                          key={step.id}
-                          className={`pauses-sync-step is-${step.state || 'pending'}`}
-                        >
-                          <span className="pauses-sync-step-mark" aria-hidden="true">
-                            {step.state === 'done'
-                              ? '✓'
-                              : step.state === 'error'
-                                ? '!'
-                                : step.state === 'running'
-                                  ? '…'
-                                  : '·'}
-                          </span>
-                          {step.label}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              )}
 
               <p className="pauses-sync-meta">
                 Poslední hovor v DB: {formatSyncTimestamp(syncFreshness?.call)}

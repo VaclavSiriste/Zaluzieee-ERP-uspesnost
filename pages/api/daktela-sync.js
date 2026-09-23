@@ -1,8 +1,28 @@
 /**
  * POST /api/daktela-sync – spustí stahování dat z Daktely do Supabase
  * GET  /api/daktela-sync – stav syncu + čerstvost dat v DB
+ *
+ * Spouštění (POST) jen pro vybrané e-maily (canTriggerDaktelaSync).
  */
+import { AUTH_COOKIE_NAME, verifyAuthToken } from '@/lib/auth'
+import { canTriggerDaktelaSync } from '@/lib/access-control'
 import { startDaktelaSync, getDaktelaSyncStatus } from '@/lib/daktela-sync'
+
+function readCookie(req, name) {
+  const raw = req.headers.cookie || ''
+  const parts = raw.split(';')
+  for (const part of parts) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) return decodeURIComponent(rest.join('='))
+  }
+  return ''
+}
+
+function getSessionEmail(req) {
+  const token = readCookie(req, AUTH_COOKIE_NAME)
+  const session = verifyAuthToken(token)
+  return session?.email || ''
+}
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
@@ -16,6 +36,16 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
+      const email = getSessionEmail(req)
+      if (!email) {
+        return res.status(401).json({ error: 'Nejste přihlášeni' })
+      }
+      if (!canTriggerDaktelaSync(email)) {
+        return res.status(403).json({
+          error: 'Nemáte oprávnění spouštět stahování dat z Daktely.'
+        })
+      }
+
       const result = await startDaktelaSync()
       const status = await getDaktelaSyncStatus()
       return res.status(result.alreadyRunning ? 409 : 200).json({

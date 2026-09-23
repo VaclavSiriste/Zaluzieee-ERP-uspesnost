@@ -5,6 +5,7 @@ import {
   canAccessPathWithRole,
   OPERATORS_HOME_PATH
 } from '@/lib/access-control'
+import GlobalDaktelaSyncButton from '@/components/GlobalDaktelaSyncButton'
 
 /**
  * Live kontrola role (Operátoři-only) — přesměruje mimo povolené stránky.
@@ -68,5 +69,10 @@ export default function AccessGate({ children }) {
     )
   }
 
-  return children
+  return (
+    <>
+      {children}
+      <GlobalDaktelaSyncButton />
+    </>
+  )
 }
