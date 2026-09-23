@@ -9,6 +9,7 @@ import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
 import SlaDrilldown from '@/components/SlaDrilldown'
+import TrasovacResponsePanel from '@/components/TrasovacResponsePanel'
 import VycetSlaPanel from '@/components/VycetSlaPanel'
 import { OPERATIONS_BRANDS } from '@/lib/operations-brands'
 
@@ -129,6 +130,7 @@ function buildBreakdownItems(metrics) {
 export default function OperationsBrandPage({ brandId = 'cz' }) {
   const brand = OPERATIONS_BRANDS[brandId] || OPERATIONS_BRANDS.cz
   const showTargets = brand.showTargets === true
+  const showTrasovacMetrics = brand.showTrasovacMetrics === true && brand.organizationId != null
   const navolaniConfigured = brand.organizationId != null || brand.navolaniSource === 'ovt-sheet'
   const vycetSlaConfigured =
     brand.organizationId != null || brand.navolaniSource === 'ovt-sheet' || brand.vycetSlaSource === 'ovt-sheet'
@@ -160,6 +162,10 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [vycetSlaMetrics, setVycetSlaMetrics] = useState(null)
   const [vycetSlaLoading, setVycetSlaLoading] = useState(true)
   const [vycetSlaError, setVycetSlaError] = useState('')
+  const [trasovacMetrics, setTrasovacMetrics] = useState(null)
+  const [trasovacLoading, setTrasovacLoading] = useState(true)
+  const [trasovacError, setTrasovacError] = useState('')
+  const [trasovacOpen, setTrasovacOpen] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -197,6 +203,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     fetchNavolaniData()
     fetchCallbackData()
     fetchVycetSlaData()
+    fetchTrasovacData()
   }, [period, startDate, endDate, brand.id])
 
   useEffect(() => {
@@ -204,6 +211,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     setNavolaniOpen(false)
     setCallbackOpen(false)
     setVycetSlaOpen(false)
+    setTrasovacOpen(false)
   }, [period, startDate, endDate, brand.id])
 
   async function fetchData() {
@@ -353,6 +361,42 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
     }
   }
 
+  async function fetchTrasovacData() {
+    if (!showTrasovacMetrics) {
+      setTrasovacMetrics(null)
+      setTrasovacError('')
+      setTrasovacLoading(false)
+      return
+    }
+
+    setTrasovacLoading(true)
+    setTrasovacError('')
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 45000)
+      const params = new URLSearchParams({
+        period,
+        brand: brand.id,
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {})
+      })
+      const response = await fetch(`/api/trasovac-response?${params}`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      const data = await response.json()
+      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+      setTrasovacMetrics(data.metrics || null)
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setTrasovacError('Načítání fronty trasovačů trvalo příliš dlouho.')
+      } else {
+        setTrasovacError(err.message || 'Nepodařilo se načíst metriku trasovačů')
+      }
+      setTrasovacMetrics(null)
+    } finally {
+      setTrasovacLoading(false)
+    }
+  }
+
   function handlePeriodChange(nextPeriod) {
     setPeriod(nextPeriod)
     if (nextPeriod !== 'custom') {
@@ -403,6 +447,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                         : ''
                     }`},
                 průměrná doba do navolání zmeškaných,
+                {showTrasovacMetrics ? ' fronta trasovačů (ERP audit log),' : ''}
                 {brand.navolaniSource === 'ovt-sheet'
                   ? ' úspěšnost navolání z OVT sheetu'
                   : ` úspěšnost navolání z ERP${
@@ -449,6 +494,12 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
           {callbackError ? (
             <section className="sla-error">
               <p className="danger">Doba do navolání: {callbackError}</p>
+            </section>
+          ) : null}
+
+          {showTrasovacMetrics && trasovacError ? (
+            <section className="sla-error">
+              <p className="danger">Fronta trasovačů: {trasovacError}</p>
             </section>
           ) : null}
 
@@ -819,6 +870,16 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 </div>
               ) : null}
             </section>
+          ) : null}
+
+          {showTrasovacMetrics && !trasovacLoading && !trasovacError && trasovacMetrics ? (
+            <TrasovacResponsePanel
+              metrics={trasovacMetrics}
+              expanded={trasovacOpen}
+              onToggle={() => setTrasovacOpen((open) => !open)}
+              brandLabel={brand.pageTitle}
+              organizationId={brand.organizationId}
+            />
           ) : null}
 
           {navolaniConfigured && !navolaniLoading && !navolaniError && navolaniMetrics ? (
