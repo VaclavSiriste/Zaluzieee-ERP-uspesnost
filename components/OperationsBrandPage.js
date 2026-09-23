@@ -453,7 +453,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                         : ''
                     }`},
                 průměrná doba do navolání zmeškaných,
-                {showTrasovacMetrics ? ' fronta trasovačů (ERP audit log),' : ''}
+                {showTrasovacMetrics ? ' SLA trasovačů 12/24/36 h (ERP audit log),' : ''}
                 {brand.navolaniSource === 'ovt-sheet'
                   ? ' úspěšnost navolání z OVT sheetu'
                   : ` úspěšnost navolání z ERP${
