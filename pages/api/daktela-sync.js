@@ -2,11 +2,13 @@
  * POST /api/daktela-sync – spustí stahování dat z Daktely do Supabase
  * GET  /api/daktela-sync – stav syncu + čerstvost dat v DB
  *
+ * Body POST (volitelné): { pathname, scripts[] }
  * Spouštění (POST) jen pro vybrané e-maily (canTriggerDaktelaSync).
  */
 import { AUTH_COOKIE_NAME, verifyAuthToken } from '@/lib/auth'
 import { canTriggerDaktelaSync } from '@/lib/access-control'
 import { startDaktelaSync, getDaktelaSyncStatus } from '@/lib/daktela-sync'
+import { resolveSyncScopeForPath } from '@/lib/daktela-sync-scope'
 
 function readCookie(req, name) {
   const raw = req.headers.cookie || ''
@@ -24,11 +26,26 @@ function getSessionEmail(req) {
   return session?.email || ''
 }
 
+function readJsonBody(req) {
+  if (!req.body) return {}
+  if (typeof req.body === 'object') return req.body
+  try {
+    return JSON.parse(req.body)
+  } catch {
+    return {}
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
+      const pathname = typeof req.query?.pathname === 'string' ? req.query.pathname : ''
       const status = await getDaktelaSyncStatus()
-      return res.status(200).json(status)
+      const scope = pathname ? resolveSyncScopeForPath(pathname) : null
+      return res.status(200).json({
+        ...status,
+        pageScope: scope
+      })
     } catch (err) {
       return res.status(500).json({ error: err.message || 'Nepodařilo se načíst stav syncu' })
     }
@@ -46,7 +63,18 @@ export default async function handler(req, res) {
         })
       }
 
-      const result = await startDaktelaSync()
+      const body = readJsonBody(req)
+      const pathname = typeof body.pathname === 'string' ? body.pathname : ''
+      const scripts = Array.isArray(body.scripts) ? body.scripts : undefined
+
+      const result = await startDaktelaSync({ pathname, scripts })
+      if (result.skipped) {
+        return res.status(200).json({
+          ok: true,
+          ...result,
+          status: await getDaktelaSyncStatus()
+        })
+      }
       const status = await getDaktelaSyncStatus()
       return res.status(result.alreadyRunning ? 409 : 200).json({
         ok: true,

@@ -2139,6 +2139,18 @@ h6 {
   color: #b91c1c;
 }
 
+.global-daktela-sync-btn.is-erp-only {
+  opacity: 0.85;
+  border-style: dashed;
+}
+
+.global-daktela-sync-scope {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  color: #475569;
+  font-weight: 600;
+}
+
 .global-daktela-sync-panel {
   width: 100%;
   border: 1px solid #c7d2fe;

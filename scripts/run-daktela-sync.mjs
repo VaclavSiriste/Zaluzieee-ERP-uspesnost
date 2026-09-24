@@ -87,7 +87,7 @@ function parseProgressLine(line) {
   }
 }
 
-function runScript(scriptName, env) {
+function runScript(scriptId, env) {
   return new Promise((resolve) => {
     const scriptPath = path.join(POHODA, 'scripts', `sync-daktela-${scriptId}.mjs`)
     if (!fs.existsSync(scriptPath)) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import { createPortal } from 'react-dom'
+import { resolveSyncScopeForPath } from '@/lib/daktela-sync-scope'
 
 function formatSyncTimestamp(value) {
   if (!value) return '—'
@@ -23,7 +24,7 @@ function formatProgressLabel(progress) {
 }
 
 /**
- * Plovoucí tlačítko „Stáhnout“ vpravo nahoře — jen pro oprávněné e-maily.
+ * Plovoucí tlačítko „Stáhnout“ — stahuje jen tabulky pro aktuální stránku.
  */
 export default function GlobalDaktelaSyncButton() {
   const router = useRouter()
@@ -33,11 +34,13 @@ export default function GlobalDaktelaSyncButton() {
   const [syncMessage, setSyncMessage] = useState('')
   const [syncFreshness, setSyncFreshness] = useState(null)
   const [syncProgress, setSyncProgress] = useState(null)
+  const [scopeLabel, setScopeLabel] = useState('')
   const [syncBusy, setSyncBusy] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const wasRunningRef = useRef(false)
 
   const isLogin = router.pathname === '/login'
+  const pageScope = resolveSyncScopeForPath(router.pathname)
 
   useEffect(() => {
     setMounted(true)
@@ -67,7 +70,10 @@ export default function GlobalDaktelaSyncButton() {
 
   async function loadSyncStatus() {
     try {
-      const response = await fetch('/api/daktela-sync')
+      const qs = router.pathname
+        ? `?pathname=${encodeURIComponent(router.pathname)}`
+        : ''
+      const response = await fetch(`/api/daktela-sync${qs}`)
       const text = await response.text()
       let data = null
       try {
@@ -98,6 +104,8 @@ export default function GlobalDaktelaSyncButton() {
       setSyncState(nextState)
       setSyncFreshness(data.dataFreshness || null)
       setSyncProgress(data.progress || null)
+      if (data.scopeLabel) setScopeLabel(data.scopeLabel)
+      else if (data.pageScope?.label) setScopeLabel(data.pageScope.label)
       return data
     } catch (err) {
       setSyncMessage(err.message || 'Nepodařilo se načíst stav syncu')
@@ -108,7 +116,7 @@ export default function GlobalDaktelaSyncButton() {
   useEffect(() => {
     if (!allowed) return undefined
     loadSyncStatus()
-  }, [allowed])
+  }, [allowed, router.pathname])
 
   useEffect(() => {
     if (!allowed || syncState !== 'running') return undefined
@@ -118,7 +126,6 @@ export default function GlobalDaktelaSyncButton() {
     return () => clearInterval(intervalId)
   }, [allowed, syncState])
 
-  // Po úspěchu nechat „Hotovo“ vidět ~12 s, pak klidový stav
   useEffect(() => {
     if (syncState !== 'success') return undefined
     const timeoutId = setTimeout(() => {
@@ -134,13 +141,27 @@ export default function GlobalDaktelaSyncButton() {
       setSyncMessage('Synchronizace už běží — sledujte průběh.')
       return
     }
+
+    if (!pageScope.needsDaktela) {
+      setPanelOpen(true)
+      setSyncState('idle')
+      setSyncMessage(pageScope.label)
+      setScopeLabel(pageScope.label)
+      return
+    }
+
     setSyncBusy(true)
     setPanelOpen(true)
-    setSyncMessage('Spouštím stahování…')
+    setScopeLabel(pageScope.label)
+    setSyncMessage(`Spouštím stahování: ${pageScope.label}…`)
     setSyncState('running')
     wasRunningRef.current = true
     try {
-      const response = await fetch('/api/daktela-sync', { method: 'POST' })
+      const response = await fetch('/api/daktela-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pathname: router.pathname })
+      })
       const text = await response.text()
       let data = null
       try {
@@ -155,8 +176,17 @@ export default function GlobalDaktelaSyncButton() {
       if (!response.ok || data?.error) {
         throw new Error(data?.error || data?.message || `HTTP ${response.status}`)
       }
+      if (data.skipped) {
+        wasRunningRef.current = false
+        setSyncState('idle')
+        setSyncMessage(data.message || pageScope.label)
+        setScopeLabel(data.scopeLabel || pageScope.label)
+        setSyncProgress(null)
+        return
+      }
       setSyncState(data.status?.state || 'running')
       setSyncMessage(data.message || data.status?.message || 'Stahování spuštěno.')
+      setScopeLabel(data.scopeLabel || data.status?.scopeLabel || pageScope.label)
       setSyncProgress(data.status?.progress || data.progress || null)
       setTimeout(() => loadSyncStatus(), 800)
     } catch (err) {
@@ -174,8 +204,9 @@ export default function GlobalDaktelaSyncButton() {
   const running = syncState === 'running'
   const success = syncState === 'success'
   const errored = syncState === 'error'
+  const erpOnly = !pageScope.needsDaktela
 
-  let label = 'Stáhnout'
+  let label = erpOnly ? 'ERP' : 'Stáhnout'
   if (running) {
     const pctLabel = formatProgressLabel(syncProgress)
     label = pctLabel ? `Stahuji… ${pctLabel}` : 'Stahuji…'
@@ -184,6 +215,7 @@ export default function GlobalDaktelaSyncButton() {
 
   const showPanel = panelOpen || running || success || errored
   const progressPct = Math.max(0, Math.min(100, Number(syncProgress?.percent) || 0))
+  const activeScope = scopeLabel || pageScope.label
 
   const ui = (
     <div className="global-daktela-sync" aria-live="polite">
@@ -191,11 +223,13 @@ export default function GlobalDaktelaSyncButton() {
         type="button"
         className={`global-daktela-sync-btn${running ? ' is-running' : ''}${
           success ? ' is-success' : ''
-        }${errored ? ' is-error' : ''}`}
+        }${errored ? ' is-error' : ''}${
+          erpOnly && !running && !success && !errored ? ' is-erp-only' : ''
+        }`}
         onClick={handleSyncData}
         disabled={syncBusy || running}
         aria-busy={syncBusy || running}
-        title="Stáhnout data z Daktely do DB"
+        title={erpOnly ? pageScope.label : `Stáhnout z Daktely: ${pageScope.label}`}
       >
         {label}
       </button>
@@ -227,6 +261,9 @@ export default function GlobalDaktelaSyncButton() {
               ×
             </button>
           </div>
+          {activeScope ? (
+            <p className="global-daktela-sync-scope">Rozsah: {activeScope}</p>
+          ) : null}
           {running ? (
             <div className="pauses-sync-bar" aria-hidden="true">
               <div
