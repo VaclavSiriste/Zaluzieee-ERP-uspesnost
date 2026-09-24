@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppMenu from '@/components/AppMenu'
 import CallSuccessNavolaniPanel from '@/components/CallSuccessNavolaniPanel'
+import CallSuccessTrasovaniPanel from '@/components/CallSuccessTrasovaniPanel'
 import DrilldownCount from '@/components/DrilldownCount'
 import ErpNavolaniDrilldown from '@/components/ErpNavolaniDrilldown'
 import FilterAssistant from '@/components/FilterAssistant'
@@ -132,6 +133,8 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const brand = OPERATIONS_BRANDS[brandId] || OPERATIONS_BRANDS.cz
   const showTargets = brand.showTargets === true
   const showTrasovacMetrics = brand.showTrasovacMetrics === true && brand.organizationId != null
+  const showTrasovaniSuccess =
+    brand.showTrasovaniSuccess === true && brand.organizationId != null
   const navolaniConfigured = brand.organizationId != null || brand.navolaniSource === 'ovt-sheet'
   const vycetSlaConfigured =
     brand.organizationId != null || brand.navolaniSource === 'ovt-sheet' || brand.vycetSlaSource === 'ovt-sheet'
@@ -151,6 +154,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [navolaniError, setNavolaniError] = useState('')
   const [breakdownOpen, setBreakdownOpen] = useState(false)
   const [navolaniOpen, setNavolaniOpen] = useState(false)
+  const [trasovaniOpen, setTrasovaniOpen] = useState(false)
   const [callbackOpen, setCallbackOpen] = useState(false)
   const [vycetSlaOpen, setVycetSlaOpen] = useState(false)
   const [drilldown, setDrilldown] = useState(null)
@@ -211,6 +215,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   useEffect(() => {
     setBreakdownOpen(false)
     setNavolaniOpen(false)
+    setTrasovaniOpen(false)
     setCallbackOpen(false)
     setVycetSlaOpen(false)
     setTrasovacOpen(false)
@@ -454,6 +459,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                     }`},
                 průměrná doba do navolání zmeškaných,
                 {showTrasovacMetrics ? ' SLA trasovačů 12/24/36 h (ERP audit log),' : ''}
+                {showTrasovaniSuccess ? ' úspěšnost trasování (termín ANO / dopadl ANO),' : ''}
                 {brand.navolaniSource === 'ovt-sheet'
                   ? ' úspěšnost navolání z OVT sheetu'
                   : ` úspěšnost navolání z ERP${
@@ -886,6 +892,21 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               onOpenMetric={openTrasovacMetric}
               brandLabel={brand.pageTitle}
               organizationId={brand.organizationId}
+            />
+          ) : null}
+
+          {showTrasovaniSuccess &&
+          navolaniConfigured &&
+          !navolaniLoading &&
+          !navolaniError &&
+          navolaniMetrics ? (
+            <CallSuccessTrasovaniPanel
+              metrics={navolaniMetrics}
+              expanded={trasovaniOpen}
+              onToggle={() => setTrasovaniOpen((open) => !open)}
+              onOpenMetric={openNavolaniMetric}
+              organizationId={brand.organizationId}
+              brandLabel={brand.pageTitle}
             />
           ) : null}
 
