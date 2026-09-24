@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import { createPortal } from 'react-dom'
 
@@ -28,6 +28,7 @@ export default function GlobalDaktelaSyncButton() {
   const [syncProgress, setSyncProgress] = useState(null)
   const [syncBusy, setSyncBusy] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
+  const wasRunningRef = useRef(false)
 
   const isLogin = router.pathname === '/login'
 
@@ -74,8 +75,20 @@ export default function GlobalDaktelaSyncButton() {
       if (!response.ok || data?.error) {
         throw new Error(data?.error || `HTTP ${response.status}`)
       }
-      setSyncState(data.state || 'idle')
-      if (data.message) setSyncMessage(data.message)
+
+      const nextState = data.state || 'idle'
+      if (wasRunningRef.current && nextState === 'success') {
+        setPanelOpen(true)
+        setSyncMessage(data.message || 'Stahování dokončeno.')
+      } else if (wasRunningRef.current && nextState === 'error') {
+        setPanelOpen(true)
+        setSyncMessage(data.message || 'Sync se nepodařil.')
+      } else if (data.message) {
+        setSyncMessage(data.message)
+      }
+
+      wasRunningRef.current = nextState === 'running'
+      setSyncState(nextState)
       setSyncFreshness(data.dataFreshness || null)
       setSyncProgress(data.progress || null)
       return data
@@ -98,6 +111,15 @@ export default function GlobalDaktelaSyncButton() {
     return () => clearInterval(intervalId)
   }, [allowed, syncState])
 
+  // Po úspěchu nechat „Hotovo“ vidět ~12 s, pak klidový stav
+  useEffect(() => {
+    if (syncState !== 'success') return undefined
+    const timeoutId = setTimeout(() => {
+      setSyncState('idle')
+    }, 12000)
+    return () => clearTimeout(timeoutId)
+  }, [syncState])
+
   async function handleSyncData() {
     if (syncBusy) return
     if (syncState === 'running') {
@@ -109,6 +131,7 @@ export default function GlobalDaktelaSyncButton() {
     setPanelOpen(true)
     setSyncMessage('Spouštím stahování…')
     setSyncState('running')
+    wasRunningRef.current = true
     try {
       const response = await fetch('/api/daktela-sync', { method: 'POST' })
       const text = await response.text()
@@ -130,6 +153,7 @@ export default function GlobalDaktelaSyncButton() {
       setSyncProgress(data.status?.progress || data.progress || null)
       setTimeout(() => loadSyncStatus(), 800)
     } catch (err) {
+      wasRunningRef.current = false
       setSyncState('error')
       setSyncMessage(err.message || 'Nepodařilo se spustit stahování')
       setSyncProgress(null)
@@ -141,28 +165,36 @@ export default function GlobalDaktelaSyncButton() {
   if (!mounted || isLogin || !allowed) return null
 
   const running = syncState === 'running'
-  const label = running
-    ? `Stahuji… ${syncProgress?.percent ?? 0} %`
-    : 'Stáhnout'
+  const success = syncState === 'success'
+  const errored = syncState === 'error'
+
+  let label = 'Stáhnout'
+  if (running) label = `Stahuji… ${syncProgress?.percent ?? 0} %`
+  else if (success) label = 'Hotovo ✓'
+  else if (errored) label = 'Chyba'
+
+  const showPanel = panelOpen || running || success || errored
 
   const ui = (
     <div className="global-daktela-sync" aria-live="polite">
       <button
         type="button"
-        className={`global-daktela-sync-btn${running ? ' is-running' : ''}`}
+        className={`global-daktela-sync-btn${running ? ' is-running' : ''}${
+          success ? ' is-success' : ''
+        }${errored ? ' is-error' : ''}`}
         onClick={handleSyncData}
-        disabled={syncBusy}
+        disabled={syncBusy || running}
         aria-busy={syncBusy || running}
         title="Stáhnout data z Daktely do DB"
       >
         {label}
       </button>
 
-      {(panelOpen || running || syncState === 'error') && (
+      {showPanel ? (
         <div
           className={`global-daktela-sync-panel${running ? ' is-running' : ''}${
-            syncState === 'error' ? ' is-error' : ''
-          }`}
+            success ? ' is-success' : ''
+          }${errored ? ' is-error' : ''}`}
         >
           <div className="global-daktela-sync-panel-top">
             <strong>
@@ -170,9 +202,11 @@ export default function GlobalDaktelaSyncButton() {
                 ? syncProgress?.currentLabel
                   ? `Stahuji: ${syncProgress.currentLabel}`
                   : 'Synchronizace běží…'
-                : syncState === 'error'
-                  ? 'Sync se nepodařil'
-                  : syncMessage || 'Stav syncu'}
+                : success
+                  ? 'Stahování dokončeno'
+                  : errored
+                    ? 'Sync se nepodařil'
+                    : syncMessage || 'Stav syncu'}
             </strong>
             <button
               type="button"
@@ -193,12 +227,19 @@ export default function GlobalDaktelaSyncButton() {
               />
             </div>
           ) : null}
+          {success ? (
+            <p className="global-daktela-sync-success-text">
+              Data z Daktely jsou v DB. Obnov stránku / filtr, ať se přepočítá SLA.
+            </p>
+          ) : null}
           <p className="global-daktela-sync-meta">
             Poslední hovor v DB: {formatSyncTimestamp(syncFreshness?.call)}
           </p>
-          {syncMessage ? <p className="pauses-sync-detail">{syncMessage}</p> : null}
+          {syncMessage && !success ? (
+            <p className="pauses-sync-detail">{syncMessage}</p>
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   )
 
