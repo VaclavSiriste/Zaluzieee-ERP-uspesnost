@@ -15,6 +15,13 @@ function formatSyncTimestamp(value) {
   })
 }
 
+function formatProgressLabel(progress) {
+  if (!progress) return null
+  const pct = Math.max(0, Math.min(100, Number(progress.percent) || 0))
+  if (progress.approximate) return `≈ ${pct} %`
+  return `${pct} %`
+}
+
 /**
  * Plovoucí tlačítko „Stáhnout“ vpravo nahoře — jen pro oprávněné e-maily.
  */
@@ -169,11 +176,14 @@ export default function GlobalDaktelaSyncButton() {
   const errored = syncState === 'error'
 
   let label = 'Stáhnout'
-  if (running) label = `Stahuji… ${syncProgress?.percent ?? 0} %`
-  else if (success) label = 'Hotovo ✓'
+  if (running) {
+    const pctLabel = formatProgressLabel(syncProgress)
+    label = pctLabel ? `Stahuji… ${pctLabel}` : 'Stahuji…'
+  } else if (success) label = 'Hotovo ✓'
   else if (errored) label = 'Chyba'
 
   const showPanel = panelOpen || running || success || errored
+  const progressPct = Math.max(0, Math.min(100, Number(syncProgress?.percent) || 0))
 
   const ui = (
     <div className="global-daktela-sync" aria-live="polite">
@@ -221,11 +231,52 @@ export default function GlobalDaktelaSyncButton() {
             <div className="pauses-sync-bar" aria-hidden="true">
               <div
                 className="pauses-sync-bar-fill"
-                style={{
-                  width: `${Math.max(0, Math.min(100, syncProgress?.percent || 0))}%`
-                }}
+                style={{ width: `${progressPct}%` }}
               />
             </div>
+          ) : null}
+          {running && syncProgress ? (
+            <div className="global-daktela-sync-stats">
+              <span>
+                {syncProgress.approximate ? 'Odhad ' : ''}
+                {formatProgressLabel(syncProgress) || `${progressPct} %`}
+              </span>
+              {syncProgress.elapsedLabel ? (
+                <span>Uplynulo {syncProgress.elapsedLabel}</span>
+              ) : null}
+              {syncProgress.remainingLabel ? (
+                <span>Zbývá {syncProgress.remainingLabel}</span>
+              ) : syncProgress.page?.remaining != null ? (
+                <span>
+                  Zbývá ~{Number(syncProgress.page.remaining).toLocaleString('cs-CZ')}{' '}
+                  záznamů
+                </span>
+              ) : null}
+              {syncProgress.doneSteps != null && syncProgress.totalSteps ? (
+                <span>
+                  Kroky {syncProgress.doneSteps}/{syncProgress.totalSteps}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {running && syncProgress?.approximate ? (
+            <p className="global-daktela-sync-hint">
+              GitHub Actions neposílá přesné % stažených stránek — ukazatel je odhad
+              podle času (typicky ~{syncProgress.estimateMinutes || 12} min).
+            </p>
+          ) : null}
+          {running &&
+          syncProgress?.page &&
+          !syncProgress.approximate &&
+          syncProgress.page.total != null ? (
+            <p className="global-daktela-sync-hint">
+              {syncProgress.currentLabel || 'Tabulka'}:{' '}
+              {Number(syncProgress.page.offset || 0).toLocaleString('cs-CZ')} /{' '}
+              {Number(syncProgress.page.total).toLocaleString('cs-CZ')}
+              {syncProgress.page.percentEntity != null
+                ? ` (${syncProgress.page.percentEntity} % této tabulky)`
+                : ''}
+            </p>
           ) : null}
           {success ? (
             <p className="global-daktela-sync-success-text">
