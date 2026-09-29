@@ -188,18 +188,21 @@ export default function OperationsTargetsPanel({
 
   const [monthKey, setMonthKey] = useState('')
   const [bucket, setBucket] = useState(null)
+  const [panelBrandId, setPanelBrandId] = useState(targetsBrandId)
   const [czSummary, setCzSummary] = useState(null)
   const [skSummary, setSkSummary] = useState(null)
-  const [expanded, setExpanded] = useState(false)
+  const [expandedBrand, setExpandedBrand] = useState(null)
   const [view, setView] = useState('technicians')
   const [erpSyncing, setErpSyncing] = useState(false)
 
   const monthOptions = useMemo(() => listMonthOptions(), [])
+  const expanded = expandedBrand != null
 
   useEffect(() => {
     if (!fromOvtSheet || !Array.isArray(sheetTechnicians) || !sheetTechnicians.length || !monthKey) {
       return
     }
+    if (panelBrandId !== targetsBrandId) return
     const incoming = sheetTechnicians
       .map((item) => ({
         id: item.id || technicianId(item.name),
@@ -229,56 +232,65 @@ export default function OperationsTargetsPanel({
       writeMonthBucket(monthKey, next, targetsBrandId)
       return next
     })
-  }, [sheetTechnicians, monthKey, targetsBrandId, fromOvtSheet])
+  }, [sheetTechnicians, monthKey, targetsBrandId, fromOvtSheet, panelBrandId])
 
-  function refreshStackSummaries(key = monthKey, primaryBucket = null) {
+  function refreshStackSummaries(key = monthKey, primaryBucket = null, primaryBrand = panelBrandId) {
     if (!showCzSkStack || !key) {
       setCzSummary(null)
       setSkSummary(null)
       return
     }
     const czBucket =
-      targetsBrandId === 'cz' && primaryBucket
-        ? primaryBucket
-        : readMonthBucket(key, 'cz')
+      primaryBrand === 'cz' && primaryBucket ? primaryBucket : readMonthBucket(key, 'cz')
     const skBucket =
-      targetsBrandId === 'sk' && primaryBucket
-        ? primaryBucket
-        : readMonthBucket(key, 'sk')
+      primaryBrand === 'sk' && primaryBucket ? primaryBucket : readMonthBucket(key, 'sk')
     setCzSummary(summarizeBucket(czBucket))
     setSkSummary(summarizeBucket(skBucket))
   }
 
-  async function reloadBucket(key = monthKey, syncRemote = false) {
+  async function syncBrandBucket(key, brand) {
+    const initial = readMonthBucket(key, brand)
+    if (fromOvtSheet) {
+      if (brand !== targetsBrandId) return initial
+      const { bucket: synced } = await syncTargetsCompletedFromOvtSheet(key, initial, {
+        brandId: brand
+      })
+      return synced
+    }
+    try {
+      const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
+        brandId: brand
+      })
+      return synced
+    } catch {
+      return initial
+    }
+  }
+
+  async function reloadBucket(key = monthKey, syncRemote = false, focusBrand = panelBrandId) {
     if (!key) return
-    const initial = readMonthBucket(key, targetsBrandId)
+    const brand = focusBrand || targetsBrandId
+    const initial = readMonthBucket(key, brand)
     if (!syncRemote) {
+      setPanelBrandId(brand)
       setBucket(initial)
-      refreshStackSummaries(key, initial)
+      refreshStackSummaries(key, initial, brand)
       return
     }
     setErpSyncing(true)
     try {
-      if (fromOvtSheet) {
-        const { bucket: synced } = await syncTargetsCompletedFromOvtSheet(key, initial, {
-          brandId: targetsBrandId
-        })
-        setBucket(synced)
-        refreshStackSummaries(key, synced)
-      } else if (organizationId == null) {
-        setBucket(initial)
-        refreshStackSummaries(key, initial)
-      } else {
-        const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
-          organizationId,
-          brandId: targetsBrandId
-        })
-        setBucket(synced)
-        refreshStackSummaries(key, synced)
+      const synced = await syncBrandBucket(key, brand)
+      setPanelBrandId(brand)
+      setBucket(synced)
+      if (showCzSkStack) {
+        const otherBrand = brand === 'cz' ? 'sk' : 'cz'
+        await syncBrandBucket(key, otherBrand)
       }
+      refreshStackSummaries(key, synced, brand)
     } catch {
+      setPanelBrandId(brand)
       setBucket(initial)
-      refreshStackSummaries(key, initial)
+      refreshStackSummaries(key, initial, brand)
     } finally {
       setErpSyncing(false)
     }
@@ -288,7 +300,9 @@ export default function OperationsTargetsPanel({
     const month = readSelectedMonthKey()
     setMonthKey(month)
     setView(readTargetsView())
-    reloadBucket(month, true)
+    setExpandedBrand(null)
+    setPanelBrandId(targetsBrandId)
+    reloadBucket(month, true, targetsBrandId)
   }, [targetsBrandId, organizationId, completedSource])
 
   useEffect(() => {
@@ -300,21 +314,27 @@ export default function OperationsTargetsPanel({
         event.key === 'prvni.targets.monthly.v1.sk' ||
         event.key === 'prvni.targets.selectedMonth'
       ) {
-        reloadBucket(monthKey)
+        reloadBucket(monthKey, false, expandedBrand || targetsBrandId)
       }
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [monthKey, targetsBrandId])
-
-  useEffect(() => {
-    if (expanded) reloadBucket(monthKey, true)
-  }, [expanded, monthKey])
+  }, [monthKey, targetsBrandId, expandedBrand])
 
   function changeMonth(nextMonthKey) {
     setMonthKey(nextMonthKey)
     writeSelectedMonthKey(nextMonthKey)
-    reloadBucket(nextMonthKey, true)
+    reloadBucket(nextMonthKey, true, expandedBrand || targetsBrandId)
+  }
+
+  function toggleExpandedBrand(brand) {
+    const next = expandedBrand === brand ? null : brand
+    setExpandedBrand(next)
+    if (next) {
+      reloadBucket(monthKey, true, next)
+    } else {
+      reloadBucket(monthKey, false, targetsBrandId)
+    }
   }
 
   const tech = bucket?.technicians
@@ -366,8 +386,8 @@ export default function OperationsTargetsPanel({
       operations: { ...operations, ...patch }
     }
     setBucket(next)
-    writeMonthBucket(monthKey, next, targetsBrandId)
-    refreshStackSummaries(monthKey, next)
+    writeMonthBucket(monthKey, next, panelBrandId)
+    refreshStackSummaries(monthKey, next, panelBrandId)
   }
 
   function changeView(nextView) {
@@ -376,13 +396,13 @@ export default function OperationsTargetsPanel({
   }
 
   const monthLabel = formatMonthLabel(monthKey)
-  const resolvedCz = showCzSkStack
-    ? targetsBrandId === 'cz'
+  const liveCz = showCzSkStack
+    ? panelBrandId === 'cz'
       ? pageSummary
       : czSummary
     : null
-  const resolvedSk = showCzSkStack
-    ? targetsBrandId === 'sk'
+  const liveSk = showCzSkStack
+    ? panelBrandId === 'sk'
       ? pageSummary
       : skSummary
     : null
@@ -398,10 +418,14 @@ export default function OperationsTargetsPanel({
           ? fromOvtSheet
             ? 'Cíl zadáte ručně. Technici = sloupec Q (OVT). Splněno = počet řádků s Datum zaměření (P) ve zvoleném měsíci ze sheetu.'
             : `Cíl zadáte ručně. Splněno = počet naplánovaných zaměření (datum_zamereni) v měsíci z ERP${
-                organizationId != null ? ` · organizace č. ${organizationId}` : ''
+                panelBrandId === 'sk'
+                  ? ' · SK Railway'
+                  : organizationId != null
+                    ? ` · organizace č. ${organizationId}`
+                    : ''
               }.`
           : showCzSkStack
-            ? 'Výsledky CZ i SK pod sebou. Rozbalte pro úpravu targetu této značky.'
+            ? 'Výsledky CZ i SK pod sebou. Rozklikněte kartu pro rozpad a splněno.'
             : 'Klikněte pro rozpad targetů — kraje a technici.'}
         {erpSyncing
           ? fromOvtSheet
@@ -415,25 +439,23 @@ export default function OperationsTargetsPanel({
           <TargetSummaryCard
             label="Target CZ"
             monthLabel={monthLabel}
-            summary={resolvedCz}
-            expanded={expanded && targetsBrandId === 'cz'}
-            expandable={targetsBrandId === 'cz'}
-            onToggle={() => setExpanded((open) => !open)}
+            summary={liveCz}
+            expanded={expandedBrand === 'cz'}
+            onToggle={() => toggleExpandedBrand('cz')}
           />
           <TargetSummaryCard
             label="Target SK"
             monthLabel={monthLabel}
-            summary={resolvedSk}
-            expanded={expanded && targetsBrandId === 'sk'}
-            expandable={targetsBrandId === 'sk'}
-            onToggle={() => setExpanded((open) => !open)}
+            summary={liveSk}
+            expanded={expandedBrand === 'sk'}
+            onToggle={() => toggleExpandedBrand('sk')}
           />
         </div>
       ) : (
         <button
           type="button"
           className={`sla-kpi-root sla-kpi-root-targets${expanded ? ' is-open' : ''}`}
-          onClick={() => setExpanded((open) => !open)}
+          onClick={() => toggleExpandedBrand(targetsBrandId)}
           aria-expanded={expanded}
         >
           <MetricLabel helpId="targets_celkem" className="sla-kpi-label">
@@ -470,7 +492,7 @@ export default function OperationsTargetsPanel({
                 className={`targets-view-btn${view === 'regions' ? ' is-active' : ''}`}
                 onClick={() => changeView('regions')}
               >
-                {targetsBrandId === 'sk' ? 'Slovensko' : 'Kraje'}
+                {panelBrandId === 'sk' ? 'Slovensko' : 'Kraje'}
               </button>
             </div>
             <div className="targets-month-switch" aria-label="Měsíc targetů">
@@ -506,8 +528,8 @@ export default function OperationsTargetsPanel({
               href="/targety"
               className="ops-targets-edit-link"
               onClick={() => {
-                if (targetsBrandId === 'sk' || targetsBrandId === 'cz') {
-                  writeTargetsBrandId(targetsBrandId)
+                if (panelBrandId === 'sk' || panelBrandId === 'cz') {
+                  writeTargetsBrandId(panelBrandId)
                 }
               }}
             >
@@ -518,7 +540,7 @@ export default function OperationsTargetsPanel({
           <div className="ops-targets-overall">
             <label className="targets-map-editor-field">
               <span className="targets-field-label">
-                Cíl celkem (kolik)
+                Cíl celkem (kolik) · {panelBrandId === 'sk' ? 'SK' : 'CZ'}
                 <MetricInfoTip helpId="targets_cil_celkem" />
               </span>
               <TargetBarInput
@@ -530,7 +552,7 @@ export default function OperationsTargetsPanel({
             </label>
             <label className="targets-map-editor-field">
               <span className="targets-field-label">
-                Splněno celkem
+                Splněno celkem · {panelBrandId === 'sk' ? 'SK' : 'CZ'}
                 <MetricInfoTip helpId="targets_splneno_celkem" />
               </span>
               <TargetBarInput
@@ -538,12 +560,7 @@ export default function OperationsTargetsPanel({
                 fillPct={completedFillPct}
                 badge="Splněno"
                 tone="completed"
-                readOnly={targetsBrandId !== 'sk'}
-                onChange={
-                  targetsBrandId === 'sk'
-                    ? (event) => persistOperations({ completed: event.target.value })
-                    : undefined
-                }
+                readOnly
               />
             </label>
           </div>
@@ -551,7 +568,7 @@ export default function OperationsTargetsPanel({
           <div className="ops-targets-columns">
             {view === 'regions' ? (
               <BreakdownList
-                title={targetsBrandId === 'sk' ? 'Slovensko (sk)' : 'Kraje'}
+                title={panelBrandId === 'sk' ? 'Slovensko (sk)' : 'Kraje'}
                 rows={regionRows}
                 values={regions.values}
                 completed={regions.completed}
