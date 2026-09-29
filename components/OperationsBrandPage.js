@@ -206,10 +206,25 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
 
   useEffect(() => {
     fetchData()
-    fetchNavolaniData()
     fetchCallbackData()
-    fetchVycetSlaData()
     fetchTrasovacData()
+
+    // SK Railway reporting_ro má nízký connection limit — ERP endpointy nespouštět najednou
+    if (brand.id === 'sk') {
+      let cancelled = false
+      ;(async () => {
+        await fetchVycetSlaData()
+        if (cancelled) return
+        await fetchNavolaniData()
+      })()
+      return () => {
+        cancelled = true
+      }
+    }
+
+    fetchNavolaniData()
+    fetchVycetSlaData()
+    return undefined
   }, [period, startDate, endDate, brand.id])
 
   useEffect(() => {

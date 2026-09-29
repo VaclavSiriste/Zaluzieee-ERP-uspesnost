@@ -279,6 +279,7 @@ export default function OperationsTargetsPanel({
     }
     setErpSyncing(true)
     try {
+      // Nejdřív aktuální značka, potom druhá (SK reporting_ro má nízký connection limit)
       const synced = await syncBrandBucket(key, brand)
       setPanelBrandId(brand)
       setBucket(synced)
