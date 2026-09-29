@@ -133,7 +133,7 @@ function TargetSummaryCard({
   monthLabel,
   summary,
   expanded,
-  expandable,
+  expandable = true,
   onToggle
 }) {
   const pct = summary?.pct
