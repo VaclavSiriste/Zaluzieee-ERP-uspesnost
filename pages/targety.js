@@ -115,12 +115,7 @@ export default function TargetyPage() {
   async function loadMonthWithErp(nextMonthKey, brandId = targetsBrandId) {
     const initial = readMonthBucket(nextMonthKey, brandId)
     setBucket(initial)
-    // SK zatím bez organization_id — jen lokální targety + mapa
-    if (brandId === 'sk') {
-      setErpSyncing(false)
-      setErpSyncError('')
-      return
-    }
+    // SK Railway ERP — sync splněno stejně jako CZ
     setErpSyncing(true)
     setErpSyncError('')
     try {
@@ -411,7 +406,7 @@ export default function TargetyPage() {
               <h1>Targety · {brandLabel}</h1>
               <p>
                 {targetsBrandId === 'sk'
-                  ? 'SK targety s mapou Slovenska. Celkový target pod mapou je region sk. Splněno zatím zadávejte ručně (chybí ERP organization_id pro SK).'
+                  ? 'SK targety s mapou Slovenska. Celkový target pod mapou je region sk. Splněno se načítá z SK ERP (Railway).'
                   : 'Cílové hodnoty podle techniků nebo krajů. Splněno z ERP: technik = zaměřovač, kraj = region z adresy zákazníka, obojí podle data zaměření v měsíci.'}
               </p>
               <div className="targets-hero-actions">

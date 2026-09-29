@@ -14,6 +14,8 @@ export default function handler(req, res) {
     checks: {
       ERP_DB_CONNECTION_STRING: Boolean(process.env.ERP_DB_CONNECTION_STRING),
       ERP_DB_CA_CERT: Boolean(process.env.ERP_DB_CA_CERT),
+      ERP_SK_DB_CONNECTION_STRING: Boolean(process.env.ERP_SK_DB_CONNECTION_STRING),
+      ERP_SK_DB_SSL: process.env.ERP_SK_DB_SSL !== 'false',
       DAKTELA_DB_CONNECTION_STRING: Boolean(process.env.DAKTELA_DB_CONNECTION_STRING),
       DAKTELA_DB_SSL: process.env.DAKTELA_DB_SSL !== 'false',
       APP_AUTH_SECRET: Boolean(process.env.APP_AUTH_SECRET?.trim()),

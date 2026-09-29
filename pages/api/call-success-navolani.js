@@ -4,7 +4,7 @@
  */
 
 import { fetchDopadlHovorSummary } from '@/lib/dopadl-hovor-metrics'
-import { getPool } from '@/lib/db-esm'
+import { getErpPool } from '@/lib/db-esm'
 import { resolveDateRange, formatDateOnly } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
 import {
@@ -59,8 +59,13 @@ export default async function handler(req, res) {
     }
   }
 
-  if (!getPool()) {
-    return res.status(500).json({ error: 'ERP databáze není dostupná (chybí ERP_DB_CONNECTION_STRING)' })
+  if (!getErpPool(brandId)) {
+    return res.status(500).json({
+      error:
+        brandId === 'sk'
+          ? 'SK ERP databáze není dostupná (chybí ERP_SK_DB_CONNECTION_STRING)'
+          : 'ERP databáze není dostupná (chybí ERP_DB_CONNECTION_STRING)'
+    })
   }
 
   const organizationId = resolveOrganizationId({
@@ -76,7 +81,7 @@ export default async function handler(req, res) {
 
   try {
     const { start, end } = resolveDateRange({ startDate, endDate, period })
-    const metrics = await fetchDopadlHovorSummary({ start, end, organizationId })
+    const metrics = await fetchDopadlHovorSummary({ start, end, organizationId, brandId })
 
     return res.status(200).json({
       period,

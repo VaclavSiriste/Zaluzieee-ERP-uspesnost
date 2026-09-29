@@ -454,7 +454,9 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                   ? ' Výčet SLA z OVT sheetu (B přijetí / K navolání)'
                   : ` Výčet SLA z ERP${
                       vycetSlaConfigured && brand.organizationId != null
-                        ? ` (organization_id č. ${brand.organizationId})`
+                        ? brand.erpSource === 'sk'
+                          ? ' (SK Railway)'
+                          : ` (organization_id č. ${brand.organizationId})`
                         : ''
                     }`},
                 průměrná doba do navolání zmeškaných,
@@ -464,7 +466,9 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                   ? ' úspěšnost navolání z OVT sheetu'
                   : ` úspěšnost navolání z ERP${
                       navolaniConfigured && brand.organizationId != null
-                        ? ` (organizace č. ${brand.organizationId})`
+                        ? brand.erpSource === 'sk'
+                          ? ' (SK Railway)'
+                          : ` (organizace č. ${brand.organizationId})`
                         : ''
                     }`}
                 {showTargets ? ' a targety provozu' : ''}. Rozbalte blok pro rozpad.

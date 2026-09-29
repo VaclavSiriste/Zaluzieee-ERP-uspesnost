@@ -3,13 +3,10 @@
  * GET /api/targets-completed?month=2026-01
  */
 
-import {
-  fetchTargetsCompletedFromErp
-} from '@/lib/targets-completed-erp'
-import { buildDefaultRegionCatalog } from '@/lib/czech-regions'
-import { getPool } from '@/lib/db-esm'
+import { fetchTargetsCompletedFromErp } from '@/lib/targets-completed-erp'
+import { getErpPool } from '@/lib/db-esm'
 import { resolveOrganizationId } from '@/lib/operations-brands'
-import { monthKeyToDateRange } from '@/lib/targets-storage'
+import { monthKeyToDateRange, resolveRegionCatalogForBrand } from '@/lib/targets-storage'
 
 function parseMonthKey(value) {
   const key = String(value || '').trim()
@@ -32,8 +29,13 @@ export default async function handler(req, res) {
     organizationId: req.query.organizationId
   })
 
-  if (!getPool()) {
-    return res.status(500).json({ error: 'ERP databáze není dostupná (chybí ERP_DB_CONNECTION_STRING)' })
+  if (!getErpPool(brandId)) {
+    return res.status(500).json({
+      error:
+        brandId === 'sk'
+          ? 'SK ERP databáze není dostupná (chybí ERP_SK_DB_CONNECTION_STRING)'
+          : 'ERP databáze není dostupná (chybí ERP_DB_CONNECTION_STRING)'
+    })
   }
 
   try {
@@ -42,13 +44,14 @@ export default async function handler(req, res) {
     const end = new Date(endDate)
     end.setHours(23, 59, 59, 999)
 
-    const regionCatalog = buildDefaultRegionCatalog()
+    const regionCatalog = resolveRegionCatalogForBrand(brandId)
 
     const completed = await fetchTargetsCompletedFromErp({
       start,
       end,
       regionCatalog,
-      organizationId
+      organizationId,
+      brandId
     })
 
     return res.status(200).json({

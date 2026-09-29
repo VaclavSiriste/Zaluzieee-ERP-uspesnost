@@ -4,7 +4,7 @@
  */
 
 import { fetchErpYesNoOrders, isErpYesNoMetric } from '@/lib/dopadl-hovor-metrics'
-import { getPool } from '@/lib/db-esm'
+import { getErpPool } from '@/lib/db-esm'
 import { resolveDateRange } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
 
@@ -14,10 +14,6 @@ const MAX_LIMIT = 200
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  if (!getPool()) {
-    return res.status(500).json({ error: 'ERP databáze není dostupná (chybí ERP_DB_CONNECTION_STRING)' })
   }
 
   const period = typeof req.query.period === 'string' ? req.query.period : 'month'
@@ -35,6 +31,15 @@ export default async function handler(req, res) {
     MAX_LIMIT
   )
   const parsedOffset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0)
+
+  if (!getErpPool(brandId)) {
+    return res.status(500).json({
+      error:
+        brandId === 'sk'
+          ? 'SK ERP databáze není dostupná (chybí ERP_SK_DB_CONNECTION_STRING)'
+          : 'ERP databáze není dostupná (chybí ERP_DB_CONNECTION_STRING)'
+    })
+  }
 
   if (
     !isErpYesNoMetric(metric) ||
@@ -57,6 +62,7 @@ export default async function handler(req, res) {
       end,
       operatorName: operatorName || undefined,
       organizationId,
+      brandId,
       limit: parsedLimit,
       offset: parsedOffset
     })

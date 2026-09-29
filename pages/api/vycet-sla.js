@@ -4,7 +4,7 @@
  * - OVT sheet (pokladamee / malujemeee): B = přijetí leadu, K = datum navolání
  */
 
-import { getPool } from '@/lib/db-esm'
+import { getErpPool } from '@/lib/db-esm'
 import { formatDateOnly } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
 import {
@@ -73,9 +73,14 @@ export default async function handler(req, res) {
     }
   }
 
-  const pool = getPool()
+  const pool = getErpPool(brandId)
   if (!pool) {
-    return res.status(500).json({ error: 'ERP databáze není dostupná' })
+    return res.status(500).json({
+      error:
+        brandId === 'sk'
+          ? 'SK ERP databáze není dostupná (chybí ERP_SK_DB_CONNECTION_STRING)'
+          : 'ERP databáze není dostupná'
+    })
   }
 
   const organizationId = resolveOrganizationId({
@@ -100,8 +105,8 @@ export default async function handler(req, res) {
       excludeVenkovkyReason: excludeVenkovky
     })
 
-    const businessBase = appendOrganizationFilter([start, end], organizationId)
-    const calendarBase = appendOrganizationFilter([start, end], organizationId)
+    const businessBase = appendOrganizationFilter([start, end], organizationId, { brandId })
+    const calendarBase = appendOrganizationFilter([start, end], organizationId, { brandId })
 
     const [businessResult, calendarResult] = await Promise.all([
       pool.query(

@@ -5,7 +5,7 @@
  *   poptavky|sla24|sla48|sla72 → kalendářní filtr dle data přijetí / created_at
  */
 
-import { getPool } from '@/lib/db-esm'
+import { getErpPool } from '@/lib/db-esm'
 import { SYSTEEEM_ORDER_URL, formatDateOnly } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
 import {
@@ -107,9 +107,14 @@ export default async function handler(req, res) {
     }
   }
 
-  const pool = getPool()
+  const pool = getErpPool(brandId)
   if (!pool) {
-    return res.status(500).json({ error: 'ERP databáze není dostupná' })
+    return res.status(500).json({
+      error:
+        brandId === 'sk'
+          ? 'SK ERP databáze není dostupná (chybí ERP_SK_DB_CONNECTION_STRING)'
+          : 'ERP databáze není dostupná'
+    })
   }
 
   const organizationId = resolveOrganizationId({
@@ -146,8 +151,8 @@ export default async function handler(req, res) {
       : SLA_BASE_FILTERS_SQL
     const fromSql = SLA_POPTAVKY_FROM_SQL
 
-    const countBase = appendOrganizationFilter([start, end], organizationId)
-    const listBase = appendOrganizationFilter([start, end], organizationId)
+    const countBase = appendOrganizationFilter([start, end], organizationId, { brandId })
+    const listBase = appendOrganizationFilter([start, end], organizationId, { brandId })
     const listParams = [...listBase.params, parsedLimit, parsedOffset]
     const limitPlaceholder = `$${listBase.params.length + 1}`
     const offsetPlaceholder = `$${listBase.params.length + 2}`
