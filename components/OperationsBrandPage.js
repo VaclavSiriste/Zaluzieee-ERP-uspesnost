@@ -6,6 +6,7 @@ import DrilldownCount from '@/components/DrilldownCount'
 import ErpNavolaniDrilldown from '@/components/ErpNavolaniDrilldown'
 import FilterAssistant from '@/components/FilterAssistant'
 import IncomingLineSlaDrilldown from '@/components/IncomingLineSlaDrilldown'
+import IncomingLoadComparePanel from '@/components/IncomingLoadComparePanel'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
@@ -717,6 +718,8 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               ) : null}
             </section>
           ) : null}
+
+          <IncomingLoadComparePanel brandId={brand.id} brandLabel={brand.pageTitle} />
 
           {!loading && !error && metrics ? (
             <section className="sla-block sla-block-nested sla-block-hours">

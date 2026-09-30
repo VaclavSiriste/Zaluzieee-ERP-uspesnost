@@ -3284,6 +3284,16 @@ h6 {
   gap: 12px;
 }
 
+.ops-load-delta.is-up {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.ops-load-delta.is-down {
+  color: #047857;
+  font-weight: 700;
+}
+
 .sla-kpi-root-targets-static {
   cursor: default;
   transform: none;
