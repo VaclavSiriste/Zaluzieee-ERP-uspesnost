@@ -22,6 +22,28 @@ function dateTime(value) {
   })
 }
 
+function sameCounts(a, b) {
+  return ['old', 'new', 'both', 'only_old_missing', 'only_old_late', 'only_new'].every(
+    (key) => a[key] === b[key]
+  )
+}
+
+function slaLabel(row) {
+  return row.mergedUpTo ? `${row.hours}–${row.mergedUpTo} h` : `${row.hours} h`
+}
+
+/** Důvod, proč se metody neshodnou na SLA 24 (řádek seznamu rozdílů). */
+function disagreementReason(row) {
+  if (row.new_h == null) {
+    return ['nedovolano', 'nedopadlo'].includes(row.status)
+      ? 'Nedovoláno — nová metoda počítá kontakt až po dovolání'
+      : 'Nová nemá razítko — hovor nespárovaný s objednávkou nebo zpožděný sync'
+  }
+  if (row.old_h == null) return 'Stará nemá změnu v iframe'
+  if (row.new_h > row.old_h) return `Nová o ${hours(row.new_h - row.old_h)} později`
+  return `Stará o ${hours(row.old_h - row.new_h)} později`
+}
+
 function diffPp(oldPart, newPart, total) {
   if (!total) return '—'
   const diff = ((newPart - oldPart) / total) * 100
@@ -95,6 +117,11 @@ export default function SlaComparePanel({
   if (!data) return null
 
   const summary = data.summary
+  const hasType = data.columns.first_contact_type
+  // 48/72 h shodné s 24 h (typicky krátké období) → jeden řádek místo tří stejných
+  const visibleSla = summary.sla.every((row) => sameCounts(row, summary.sla[0]))
+    ? [{ ...summary.sla[0], mergedUpTo: summary.sla[summary.sla.length - 1].hours }]
+    : summary.sla
   const missingColumns = Object.entries(data.columns)
     .filter(([, present]) => !present)
     .map(([name]) => name)
@@ -157,23 +184,45 @@ export default function SlaComparePanel({
             </article>
           </div>
 
+          <ul className="sla-block-desc">
+            <li>
+              <strong>Splněno – stará / nová:</strong> kolik z {summary.total.toLocaleString('cs-CZ')}{' '}
+              poptávek mělo první kontakt do daného limitu podle každé metody.
+            </li>
+            <li>
+              <strong>Shodně splněno:</strong> SLA splnily obě metody — tady se metody shodují.
+            </li>
+            <li>
+              <strong>Nová nemá razítko:</strong> stará SLA splnila, nová pro objednávku nemá žádný
+              první kontakt (nedovoláno, nespárovaný hovor, zpožděný sync).
+            </li>
+            <li>
+              <strong>Nová později:</strong> obě mají kontakt, ale podle nové přišel až po limitu.
+            </li>
+            <li>
+              <strong>Jen nová splnila:</strong> opačný případ — nová metoda vidí kontakt dřív než
+              stará.
+            </li>
+          </ul>
+
           <div className="drilldown-table-wrap">
             <table className="drilldown-table">
               <thead>
                 <tr>
-                  <th>SLA</th>
-                  <th>Stará metoda</th>
-                  <th>Nová metoda</th>
+                  <th>Limit</th>
+                  <th>Splněno – stará</th>
+                  <th>Splněno – nová</th>
                   <th>Rozdíl</th>
-                  <th>Obě splněno</th>
-                  <th>Jen stará</th>
-                  <th>Jen nová</th>
+                  <th>Shodně splněno</th>
+                  <th>Nová nemá razítko</th>
+                  <th>Nová později</th>
+                  <th>Jen nová splnila</th>
                 </tr>
               </thead>
               <tbody>
-                {summary.sla.map((row) => (
+                {visibleSla.map((row) => (
                   <tr key={row.hours}>
-                    <td>{row.hours} h</td>
+                    <td>{slaLabel(row)}</td>
                     <td>
                       {pct(row.old, summary.total)} <span className="drilldown-muted">({row.old})</span>
                     </td>
@@ -182,13 +231,20 @@ export default function SlaComparePanel({
                     </td>
                     <td>{diffPp(row.old, row.new, summary.total)}</td>
                     <td>{row.both}</td>
-                    <td>{row.only_old}</td>
+                    <td>{row.only_old_missing}</td>
+                    <td>{row.only_old_late}</td>
                     <td>{row.only_new}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {visibleSla.length < summary.sla.length ? (
+            <p className="drilldown-muted">
+              48 h a 72 h vychází zatím stejně jako 24 h (žádná poptávka v období není kontaktovaná
+              později než za 24 h), proto jsou sloučené do jednoho řádku.
+            </p>
+          ) : null}
 
           {data.byType.length ? (
             <div className="drilldown-table-wrap">
@@ -218,8 +274,12 @@ export default function SlaComparePanel({
           ) : null}
 
           <p className="sla-block-desc">
-            Objednávky, kde se metody neshodnou na SLA 24 ({data.disagreements.length}
-            {data.disagreements.length === 200 ? '+' : ''}), podle největšího rozdílu:
+            <strong>
+              Objednávky, kde se metody neshodnou na SLA 24 ({data.disagreements.length}
+              {data.disagreements.length === 200 ? '+' : ''})
+            </strong>
+            . „Hodin do kontaktu“ = doba od vzniku poptávky do prvního kontaktu podle dané metody,
+            pomlčka = metoda kontakt nemá. Seřazeno od největšího rozdílu.
           </p>
           <div className="drilldown-table-wrap">
             <table className="drilldown-table">
@@ -228,11 +288,12 @@ export default function SlaComparePanel({
                   <th>Objednávka</th>
                   <th>Vznik</th>
                   <th>Stav</th>
-                  <th>Iframe (stará)</th>
-                  <th>První kontakt (nová)</th>
-                  <th>Typ</th>
-                  <th>Stará</th>
-                  <th>Nová</th>
+                  <th>Kontakt – stará (iframe)</th>
+                  <th>Kontakt – nová</th>
+                  {hasType ? <th>Typ kontaktu</th> : null}
+                  <th>Hodin do kontaktu – stará</th>
+                  <th>Hodin do kontaktu – nová</th>
+                  <th>Proč se liší</th>
                 </tr>
               </thead>
               <tbody>
@@ -252,9 +313,10 @@ export default function SlaComparePanel({
                     <td>{row.status || '—'}</td>
                     <td>{dateTime(row.old_at)}</td>
                     <td>{dateTime(row.new_at)}</td>
-                    <td>{row.new_type || '—'}</td>
+                    {hasType ? <td>{row.new_type || '—'}</td> : null}
                     <td>{hours(row.old_h)}</td>
                     <td>{hours(row.new_h)}</td>
+                    <td>{disagreementReason(row)}</td>
                   </tr>
                 ))}
               </tbody>
