@@ -15,7 +15,8 @@ export default function VycetSlaPanel({
   onOpenMetric,
   organizationId = null,
   brandLabel = '',
-  source = 'erp-db'
+  source = 'erp-db',
+  children = null
 }) {
   if (!metrics) return null
 
@@ -163,6 +164,8 @@ export default function VycetSlaPanel({
               </span>
             </article>
           </div>
+
+          {children}
         </div>
       ) : null}
     </section>
