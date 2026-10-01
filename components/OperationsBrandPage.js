@@ -10,6 +10,7 @@ import IncomingLoadComparePanel from '@/components/IncomingLoadComparePanel'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
+import SlaComparePanel from '@/components/SlaComparePanel'
 import SlaDrilldown from '@/components/SlaDrilldown'
 import TrasovacResponseDrilldown from '@/components/TrasovacResponseDrilldown'
 import TrasovacResponsePanel from '@/components/TrasovacResponsePanel'
@@ -158,6 +159,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [trasovaniOpen, setTrasovaniOpen] = useState(false)
   const [callbackOpen, setCallbackOpen] = useState(false)
   const [vycetSlaOpen, setVycetSlaOpen] = useState(false)
+  const [slaCompareOpen, setSlaCompareOpen] = useState(false)
   const [drilldown, setDrilldown] = useState(null)
   const [navolaniDrilldown, setNavolaniDrilldown] = useState(null)
   const [callbackDrilldown, setCallbackDrilldown] = useState(null)
@@ -786,6 +788,17 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               organizationId={brand.organizationId}
               brandLabel={brand.pageTitle}
               source={vycetSlaSource}
+            />
+          ) : null}
+
+          {brand.showSlaCompare ? (
+            <SlaComparePanel
+              period={period}
+              startDate={startDate}
+              endDate={endDate}
+              organizationId={brand.organizationId}
+              expanded={slaCompareOpen}
+              onToggle={() => setSlaCompareOpen((open) => !open)}
             />
           ) : null}
 
