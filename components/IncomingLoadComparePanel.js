@@ -82,7 +82,14 @@ export default function IncomingLoadComparePanel({ brandId = 'cz', brandLabel = 
     )
   }
 
-  if (!data?.thisMonth || !data?.lastMonth) return null
+  if (!data?.thisMonth || !data?.lastMonth) {
+    return (
+      <section className="sla-block sla-block-nested sla-block-load-compare">
+        <h2 className="sla-block-title">Nápor a odmítnuté</h2>
+        <p className="sla-block-desc">Žádná data ke srovnání.</p>
+      </section>
+    )
+  }
 
   const asOf = data.asOfDate
     ? new Date(`${data.asOfDate}T12:00:00`).toLocaleDateString('cs-CZ')

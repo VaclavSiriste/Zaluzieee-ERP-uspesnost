@@ -510,6 +510,8 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             metricHelpId="filter_obdobi"
           />
 
+          <IncomingLoadComparePanel brandId={brand.id} brandLabel={brand.pageTitle} />
+
           {loading && navolaniLoading && callbackLoading && (!vycetSlaConfigured || vycetSlaLoading) ? (
             <div className="sla-loading">
               <span className="pauses-spinner" />
@@ -718,8 +720,6 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               ) : null}
             </section>
           ) : null}
-
-          <IncomingLoadComparePanel brandId={brand.id} brandLabel={brand.pageTitle} />
 
           {!loading && !error && metrics ? (
             <section className="sla-block sla-block-nested sla-block-hours">
