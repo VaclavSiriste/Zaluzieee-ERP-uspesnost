@@ -5030,3 +5030,112 @@ h6 {
     overflow-x: auto;
   }
 }
+
+/* ---- Časový rozpad SLA ---- */
+.sla-time {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.sla-time-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sla-time-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e2a52;
+}
+
+.sla-time-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sla-time-tabs {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: #eef0ff;
+}
+
+.sla-time-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #475569;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sla-time-tab.is-active {
+  background: #fff;
+  color: #1e2a52;
+  box-shadow: 0 1px 3px rgba(30, 42, 82, 0.12);
+}
+
+.sla-time-chart {
+  position: relative;
+}
+
+.sla-time-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sla-time-grid {
+  stroke: #e2e8f0;
+  stroke-width: 1;
+}
+
+.sla-time-axis {
+  fill: #64748b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-time-bar {
+  fill: #4f46e5;
+}
+
+.sla-time-bar.is-low {
+  fill: #c7d2fe;
+}
+
+.sla-time-bar.is-hover {
+  fill: #3730a3;
+}
+
+.sla-time-bar.is-low.is-hover {
+  fill: #a5b4fc;
+}
+
+.sla-time-tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #1e2a52;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(30, 42, 82, 0.25);
+}

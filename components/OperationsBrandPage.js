@@ -12,6 +12,7 @@ import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
 import SlaComparePanel from '@/components/SlaComparePanel'
 import SlaDrilldown from '@/components/SlaDrilldown'
+import SlaTimeBreakdown from '@/components/SlaTimeBreakdown'
 import TrasovacResponseDrilldown from '@/components/TrasovacResponseDrilldown'
 import TrasovacResponsePanel from '@/components/TrasovacResponsePanel'
 import VycetSlaPanel from '@/components/VycetSlaPanel'
@@ -723,6 +724,15 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                       </article>
                     ))}
                   </div>
+
+                  <SlaTimeBreakdown
+                    kind="incoming"
+                    brandId={brand.id}
+                    period={period}
+                    startDate={startDate}
+                    endDate={endDate}
+                    baseLabel="zvednutých hovorů"
+                  />
                 </div>
               ) : null}
             </section>
@@ -794,6 +804,16 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               brandLabel={brand.pageTitle}
               source={vycetSlaSource}
             >
+              {vycetSlaSource === 'erp-db' ? (
+                <SlaTimeBreakdown
+                  kind="vycet"
+                  brandId={brand.id}
+                  period={period}
+                  startDate={startDate}
+                  endDate={endDate}
+                  baseLabel="poptávek"
+                />
+              ) : null}
               {brand.showSlaCompare ? (
                 <SlaComparePanel
                   period={period}
