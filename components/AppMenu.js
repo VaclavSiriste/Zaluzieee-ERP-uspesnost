@@ -69,9 +69,6 @@ export default function AppMenu({ active = 'dashboard' }) {
             <li className={active === 'sla' ? 'active' : ''}>
               <Link href="/vycet-sla">Výčet SLA</Link>
             </li>
-            <li className={active === 'slaCompare' ? 'active' : ''}>
-              <Link href="/vycet-sla/porovnani">SLA – porovnání</Link>
-            </li>
             <li className={active === 'targets' ? 'active' : ''}>
               <Link href="/targety">Targety</Link>
             </li>
