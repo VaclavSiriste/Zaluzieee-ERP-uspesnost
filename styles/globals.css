@@ -4790,3 +4790,243 @@ h6 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---- Výčet SLA · porovnání metod ---- */
+.sla-cmp {
+  display: grid;
+  gap: 16px;
+  margin-top: 8px;
+  padding: 20px;
+  border: 1px solid #d8deff;
+  border-radius: 18px;
+  background: #f8f9ff;
+}
+
+.sla-cmp-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 750;
+  color: #1e2a52;
+}
+
+.sla-cmp-sub,
+.sla-cmp-note {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 900px;
+}
+
+.sla-cmp-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sla-cmp-stat {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.sla-cmp-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.sla-cmp-stat-value {
+  font-size: 1.6rem;
+  font-weight: 760;
+  line-height: 1.1;
+  color: #1e2a52;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-cmp-stat-hint {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sla-cmp-bar-wrap {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.sla-cmp-bar-caption {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: #1e2a52;
+}
+
+.sla-cmp-bar {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sla-cmp-seg {
+  flex-basis: 0;
+  min-width: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-cmp-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sla-cmp-legend li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  column-gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #1e2a52;
+}
+
+.sla-cmp-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.sla-cmp-legend-label {
+  font-weight: 600;
+}
+
+.sla-cmp-legend-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-cmp-legend-hint {
+  grid-column: 2 / 4;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* barvy segmentů / teček / štítků */
+.sla-cmp-seg.sla-cmp-tone-both,
+.sla-cmp-dot.sla-cmp-tone-both { background: #0d9488; }
+.sla-cmp-seg.sla-cmp-tone-missing,
+.sla-cmp-dot.sla-cmp-tone-missing { background: #d97706; }
+.sla-cmp-seg.sla-cmp-tone-late,
+.sla-cmp-dot.sla-cmp-tone-late { background: #dc2626; }
+.sla-cmp-seg.sla-cmp-tone-new,
+.sla-cmp-dot.sla-cmp-tone-new { background: #4f46e5; }
+.sla-cmp-seg.sla-cmp-tone-none,
+.sla-cmp-dot.sla-cmp-tone-none { background: #cbd5e1; }
+.sla-cmp-seg.sla-cmp-tone-none { color: #334155; }
+
+.sla-cmp-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #e3e7ff;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  font-size: 13px;
+}
+
+.sla-cmp-table th {
+  padding: 10px 12px;
+  background: #eef0ff;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sla-cmp-table td {
+  padding: 9px 12px;
+  border-top: 1px solid #eef0ff;
+  color: #1e2a52;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.sla-cmp-table tbody tr:hover td {
+  background: #f8f9ff;
+}
+
+.sla-cmp-details summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: #4f46e5;
+}
+
+.sla-cmp-details[open] summary {
+  margin-bottom: 8px;
+}
+
+.sla-cmp-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.sla-cmp-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sla-cmp-pill.sla-cmp-tone-missing { background: #fef3c7; color: #92400e; }
+.sla-cmp-pill.sla-cmp-tone-late { background: #fee2e2; color: #991b1b; }
+.sla-cmp-pill.sla-cmp-tone-new { background: #e0e7ff; color: #3730a3; }
+
+.sla-cmp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .sla-cmp-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .sla-cmp-details {
+    overflow-x: auto;
+  }
+}
