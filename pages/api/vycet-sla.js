@@ -15,6 +15,7 @@ import {
 import {
   BUSINESS_DATE_SQL,
   CALENDAR_DATE_SQL,
+  DOPADL_ANO_SQL,
   NAVOLANO_FLAG_SQL,
   SLA24_FLAG_SQL,
   SLA48_FLAG_SQL,
@@ -128,7 +129,8 @@ export default async function handler(req, res) {
           COUNT(o.id)::int AS poptavky,
           COALESCE(SUM(${SLA24_FLAG_SQL}), 0)::int AS sla24,
           COALESCE(SUM(${SLA48_FLAG_SQL}), 0)::int AS sla48,
-          COALESCE(SUM(${SLA72_FLAG_SQL}), 0)::int AS sla72
+          COALESCE(SUM(${SLA72_FLAG_SQL}), 0)::int AS sla72,
+          COUNT(*) FILTER (WHERE ${DOPADL_ANO_SQL})::int AS dopadl_all_ano
         ${SLA_POPTAVKY_FROM_SQL}
         WHERE (${CALENDAR_DATE_SQL}) >= $1::date
           AND (${CALENDAR_DATE_SQL}) <= $2::date
@@ -147,6 +149,7 @@ export default async function handler(req, res) {
     const sla24 = Number(calendarResult.rows[0]?.sla24) || 0
     const sla48 = Number(calendarResult.rows[0]?.sla48) || 0
     const sla72 = Number(calendarResult.rows[0]?.sla72) || 0
+    const dopadlAllAno = Number(calendarResult.rows[0]?.dopadl_all_ano) || 0
 
     return res.status(200).json({
       period,
@@ -166,7 +169,9 @@ export default async function handler(req, res) {
         sla72,
         sla24_pct: formatSlaPercent(sla24, poptavky),
         sla48_pct: formatSlaPercent(sla48, poptavky),
-        sla72_pct: formatSlaPercent(sla72, poptavky)
+        sla72_pct: formatSlaPercent(sla72, poptavky),
+        dopadl_all_ano: dopadlAllAno,
+        dopadl_all_pct: formatSlaPercent(dopadlAllAno, poptavky)
       }
     })
   } catch (error) {
