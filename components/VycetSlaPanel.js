@@ -58,6 +58,9 @@ export default function VycetSlaPanel({
           {Number(metrics.poptavky || 0).toLocaleString('cs-CZ')} poptávek
           {' · '}
           Splněno navolání {formatPercent(metrics.fulfilled_pct)}
+          {metrics.dopadl_all_ano != null
+            ? ` · Dopadl hovor ${formatPercent(metrics.dopadl_all_pct)} ze všech`
+            : ''}
         </span>
         <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
       </button>
@@ -164,6 +167,27 @@ export default function VycetSlaPanel({
               </span>
             </article>
           </div>
+
+          {metrics.dopadl_all_ano != null ? (
+            <div className="sla-kpi-breakdown" aria-label="Dopadl hovor ze všech leadů">
+              <article className="sla-kpi sla-kpi-child">
+                <MetricLabel helpId="vycet_sla_dopadl_all">Dopadl hovor ANO</MetricLabel>
+                <strong className="sla-kpi-value">
+                  {Number(metrics.dopadl_all_ano || 0).toLocaleString('cs-CZ')}
+                </strong>
+                <span className="sla-kpi-hint">z poptávek v období</span>
+              </article>
+              <article className="sla-kpi sla-kpi-child">
+                <MetricLabel helpId="vycet_sla_dopadl_all">Dopadl hovor · ze všech leadů</MetricLabel>
+                <strong className="sla-kpi-value">{formatPercent(metrics.dopadl_all_pct)}</strong>
+                <span className="sla-kpi-hint">
+                  {Number(metrics.dopadl_all_ano || 0).toLocaleString('cs-CZ')} /{' '}
+                  {Number(metrics.poptavky || 0).toLocaleString('cs-CZ')} poptávek (i bez vyplněného
+                  ANO/NE)
+                </span>
+              </article>
+            </div>
+          ) : null}
 
           {children}
         </div>
