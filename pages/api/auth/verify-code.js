@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       homePath = await getHomePathForEmail(email)
     } catch (error) {
       console.warn('verify-code homePath:', error.message)
-      // jan.paracka a další operators-only — bezpečný fallback
+      // operators-only — bezpečný fallback při chybě role
       homePath = OPERATORS_HOME_PATH
     }
 
