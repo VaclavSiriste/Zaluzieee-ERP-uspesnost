@@ -22,6 +22,28 @@ function dateTime(value) {
   })
 }
 
+function sameCounts(a, b) {
+  return ['old', 'new', 'both', 'only_old_missing', 'only_old_late', 'only_new'].every(
+    (key) => a[key] === b[key]
+  )
+}
+
+function slaLabel(row) {
+  return row.mergedUpTo ? `${row.hours}–${row.mergedUpTo} h` : `${row.hours} h`
+}
+
+/** Důvod, proč se metody neshodnou na SLA 24 (řádek seznamu rozdílů). */
+function disagreementReason(row) {
+  if (row.new_h == null) {
+    return ['nedovolano', 'nedopadlo'].includes(row.status)
+      ? 'Nedovoláno — nová metoda počítá kontakt až po dovolání'
+      : 'Nová nemá razítko — hovor nespárovaný s objednávkou nebo zpožděný sync'
+  }
+  if (row.old_h == null) return 'Stará nemá změnu v iframe'
+  if (row.new_h > row.old_h) return `Nová o ${hours(row.new_h - row.old_h)} později`
+  return `Stará o ${hours(row.old_h - row.new_h)} později`
+}
+
 function diffPp(oldPart, newPart, total) {
   if (!total) return '—'
   const diff = ((newPart - oldPart) / total) * 100
@@ -32,14 +54,13 @@ function diffPp(oldPart, newPart, total) {
 /**
  * SLA 24/48/72: stará metoda (first_iframe_change_at) vs. nová pole ze zadání
  * SLA reportingu (first_contact_at / first_response_minutes). Data si načítá sám.
+ * Vkládá se do rozbaleného rozpadu VycetSlaPanel.
  */
 export default function SlaComparePanel({
   period,
   startDate = '',
   endDate = '',
-  organizationId = null,
-  expanded,
-  onToggle
+  organizationId = null
 }) {
   const [onlyCovered, setOnlyCovered] = useState(true)
   const [data, setData] = useState(null)
@@ -89,25 +110,27 @@ export default function SlaComparePanel({
 
   if (error) {
     return (
-      <section className="sla-error">
-        <p className="danger">SLA – porovnání metod: {error}</p>
-      </section>
+      <p className="danger">Porovnání metod: {error}</p>
     )
   }
 
   if (!data) return null
 
   const summary = data.summary
-  const sla24 = summary.sla.find((row) => row.hours === 24)
+  const hasType = data.columns.first_contact_type
+  // 48/72 h shodné s 24 h (typicky krátké období) → jeden řádek místo tří stejných
+  const visibleSla = summary.sla.every((row) => sameCounts(row, summary.sla[0]))
+    ? [{ ...summary.sla[0], mergedUpTo: summary.sla[summary.sla.length - 1].hours }]
+    : summary.sla
   const missingColumns = Object.entries(data.columns)
     .filter(([, present]) => !present)
     .map(([name]) => name)
 
   return (
-    <section className={`sla-block sla-block-nested${expanded ? ' is-expanded' : ''}`}>
-      <h2 className="sla-block-title">SLA – porovnání metod</h2>
+    <div className="sla-breakdown-stack" aria-label="Porovnání metod SLA">
+      <p className="sla-queue-breakdown-title">Porovnání metod · stará (iframe) vs. nová (první kontakt)</p>
       <p className="sla-block-desc">
-        Stejné poptávky jako Výčet SLA. Stará metoda: první změna v iframe (
+        Stejné poptávky jako SLA 24 / 48 / 72 výše. Stará metoda: první změna v iframe (
         <code>first_iframe_change_at</code>). Nová: první kontakt ze zadání SLA reportingu (
         <code>first_contact_at</code>, <code>first_response_minutes</code>).
         {data.hasNew && summary.first_new_filled
@@ -122,171 +145,185 @@ export default function SlaComparePanel({
         </p>
       ) : (
         <>
-          <button
-            type="button"
-            className={`sla-kpi-root${expanded ? ' is-open' : ''}`}
-            onClick={onToggle}
-            aria-expanded={expanded}
-          >
-            <span className="sla-kpi-label">SLA 24 · stará / nová</span>
-            <strong className="sla-kpi-value">
-              {pct(sla24.old, summary.total)} / {pct(sla24.new, summary.total)}
-            </strong>
-            <span className="sla-kpi-hint">
-              {summary.total.toLocaleString('cs-CZ')} poptávek · jen stará {sla24.only_old} · jen nová{' '}
-              {sla24.only_new} · medián rozdílu {hours(summary.median_diff_h)}
-            </span>
-            <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
-          </button>
+          <label className="sla-block-desc">
+            <input
+              type="checkbox"
+              checked={onlyCovered}
+              onChange={(event) => setOnlyCovered(event.target.checked)}
+            />{' '}
+            Jen objednávky od prvního vyplněného <code>first_contact_at</code> (starší nová pole
+            nemají)
+          </label>
 
-          {expanded ? (
-            <div className="sla-breakdown-stack" aria-label="Rozpad porovnání SLA">
-              <label className="sla-block-desc">
-                <input
-                  type="checkbox"
-                  checked={onlyCovered}
-                  onChange={(event) => setOnlyCovered(event.target.checked)}
-                />{' '}
-                Jen objednávky od prvního vyplněného <code>first_contact_at</code> (starší nová pole
-                nemají)
-              </label>
+          <div className="sla-kpi-breakdown" aria-label="Pokrytí dat">
+            <article className="sla-kpi sla-kpi-child">
+              <span className="sla-kpi-label">Poptávky</span>
+              <strong className="sla-kpi-value">{summary.total.toLocaleString('cs-CZ')}</strong>
+              <span className="sla-kpi-hint">společná množina</span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <span className="sla-kpi-label">Má starý kontakt</span>
+              <strong className="sla-kpi-value">{pct(summary.old_filled, summary.total)}</strong>
+              <span className="sla-kpi-hint">
+                {summary.old_filled.toLocaleString('cs-CZ')} · medián {hours(summary.old_median_h)}
+              </span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <span className="sla-kpi-label">Má nový kontakt</span>
+              <strong className="sla-kpi-value">{pct(summary.new_filled, summary.total)}</strong>
+              <span className="sla-kpi-hint">
+                {summary.new_filled.toLocaleString('cs-CZ')} · medián {hours(summary.new_median_h)}
+              </span>
+            </article>
+            <article className="sla-kpi sla-kpi-child">
+              <span className="sla-kpi-label">Medián rozdílu</span>
+              <strong className="sla-kpi-value">{hours(summary.median_diff_h)}</strong>
+              <span className="sla-kpi-hint">
+                nový − starý · záporné: {summary.old_negative} / {summary.new_negative}
+              </span>
+            </article>
+          </div>
 
-              <div className="sla-kpi-breakdown" aria-label="Pokrytí dat">
-                <article className="sla-kpi sla-kpi-child">
-                  <span className="sla-kpi-label">Poptávky</span>
-                  <strong className="sla-kpi-value">{summary.total.toLocaleString('cs-CZ')}</strong>
-                  <span className="sla-kpi-hint">společná množina</span>
-                </article>
-                <article className="sla-kpi sla-kpi-child">
-                  <span className="sla-kpi-label">Má starý kontakt</span>
-                  <strong className="sla-kpi-value">{pct(summary.old_filled, summary.total)}</strong>
-                  <span className="sla-kpi-hint">
-                    {summary.old_filled.toLocaleString('cs-CZ')} · medián {hours(summary.old_median_h)}
-                  </span>
-                </article>
-                <article className="sla-kpi sla-kpi-child">
-                  <span className="sla-kpi-label">Má nový kontakt</span>
-                  <strong className="sla-kpi-value">{pct(summary.new_filled, summary.total)}</strong>
-                  <span className="sla-kpi-hint">
-                    {summary.new_filled.toLocaleString('cs-CZ')} · medián {hours(summary.new_median_h)}
-                  </span>
-                </article>
-                <article className="sla-kpi sla-kpi-child">
-                  <span className="sla-kpi-label">Medián rozdílu</span>
-                  <strong className="sla-kpi-value">{hours(summary.median_diff_h)}</strong>
-                  <span className="sla-kpi-hint">
-                    nový − starý · záporné: {summary.old_negative} / {summary.new_negative}
-                  </span>
-                </article>
-              </div>
+          <ul className="sla-block-desc">
+            <li>
+              <strong>Splněno – stará / nová:</strong> kolik z {summary.total.toLocaleString('cs-CZ')}{' '}
+              poptávek mělo první kontakt do daného limitu podle každé metody.
+            </li>
+            <li>
+              <strong>Shodně splněno:</strong> SLA splnily obě metody — tady se metody shodují.
+            </li>
+            <li>
+              <strong>Nová nemá razítko:</strong> stará SLA splnila, nová pro objednávku nemá žádný
+              první kontakt (nedovoláno, nespárovaný hovor, zpožděný sync).
+            </li>
+            <li>
+              <strong>Nová později:</strong> obě mají kontakt, ale podle nové přišel až po limitu.
+            </li>
+            <li>
+              <strong>Jen nová splnila:</strong> opačný případ — nová metoda vidí kontakt dřív než
+              stará.
+            </li>
+          </ul>
 
-              <div className="drilldown-table-wrap">
-                <table className="drilldown-table">
-                  <thead>
-                    <tr>
-                      <th>SLA</th>
-                      <th>Stará metoda</th>
-                      <th>Nová metoda</th>
-                      <th>Rozdíl</th>
-                      <th>Obě splněno</th>
-                      <th>Jen stará</th>
-                      <th>Jen nová</th>
+          <div className="drilldown-table-wrap">
+            <table className="drilldown-table">
+              <thead>
+                <tr>
+                  <th>Limit</th>
+                  <th>Splněno – stará</th>
+                  <th>Splněno – nová</th>
+                  <th>Rozdíl</th>
+                  <th>Shodně splněno</th>
+                  <th>Nová nemá razítko</th>
+                  <th>Nová později</th>
+                  <th>Jen nová splnila</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleSla.map((row) => (
+                  <tr key={row.hours}>
+                    <td>{slaLabel(row)}</td>
+                    <td>
+                      {pct(row.old, summary.total)} <span className="drilldown-muted">({row.old})</span>
+                    </td>
+                    <td>
+                      {pct(row.new, summary.total)} <span className="drilldown-muted">({row.new})</span>
+                    </td>
+                    <td>{diffPp(row.old, row.new, summary.total)}</td>
+                    <td>{row.both}</td>
+                    <td>{row.only_old_missing}</td>
+                    <td>{row.only_old_late}</td>
+                    <td>{row.only_new}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {visibleSla.length < summary.sla.length ? (
+            <p className="drilldown-muted">
+              48 h a 72 h vychází zatím stejně jako 24 h (žádná poptávka v období není kontaktovaná
+              později než za 24 h), proto jsou sloučené do jednoho řádku.
+            </p>
+          ) : null}
+
+          {data.byType.length ? (
+            <div className="drilldown-table-wrap">
+              <table className="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Typ prvního kontaktu</th>
+                    <th>Poptávky</th>
+                    <th>SLA 24 nová</th>
+                    <th>SLA 24 stará</th>
+                    <th>Medián (nová)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.byType.map((row) => (
+                    <tr key={row.type}>
+                      <td>{row.type}</td>
+                      <td>{row.total}</td>
+                      <td>{pct(row.new_sla24, row.total)}</td>
+                      <td>{pct(row.old_sla24, row.total)}</td>
+                      <td>{hours(row.new_median_h)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {summary.sla.map((row) => (
-                      <tr key={row.hours}>
-                        <td>{row.hours} h</td>
-                        <td>
-                          {pct(row.old, summary.total)} <span className="drilldown-muted">({row.old})</span>
-                        </td>
-                        <td>
-                          {pct(row.new, summary.total)} <span className="drilldown-muted">({row.new})</span>
-                        </td>
-                        <td>{diffPp(row.old, row.new, summary.total)}</td>
-                        <td>{row.both}</td>
-                        <td>{row.only_old}</td>
-                        <td>{row.only_new}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {data.byType.length ? (
-                <div className="drilldown-table-wrap">
-                  <table className="drilldown-table">
-                    <thead>
-                      <tr>
-                        <th>Typ prvního kontaktu</th>
-                        <th>Poptávky</th>
-                        <th>SLA 24 nová</th>
-                        <th>SLA 24 stará</th>
-                        <th>Medián (nová)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.byType.map((row) => (
-                        <tr key={row.type}>
-                          <td>{row.type}</td>
-                          <td>{row.total}</td>
-                          <td>{pct(row.new_sla24, row.total)}</td>
-                          <td>{pct(row.old_sla24, row.total)}</td>
-                          <td>{hours(row.new_median_h)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              <p className="sla-block-desc">
-                Objednávky, kde se metody neshodnou na SLA 24 ({data.disagreements.length}
-                {data.disagreements.length === 200 ? '+' : ''}), podle největšího rozdílu:
-              </p>
-              <div className="drilldown-table-wrap">
-                <table className="drilldown-table">
-                  <thead>
-                    <tr>
-                      <th>Objednávka</th>
-                      <th>Vznik</th>
-                      <th>Stav</th>
-                      <th>Iframe (stará)</th>
-                      <th>První kontakt (nová)</th>
-                      <th>Typ</th>
-                      <th>Stará</th>
-                      <th>Nová</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.disagreements.map((row) => (
-                      <tr key={row.order_id}>
-                        <td>
-                          <a
-                            className="drilldown-detail-link"
-                            href={`${SYSTEEEM_ORDER_URL}${row.order_id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {row.order_id}
-                          </a>
-                        </td>
-                        <td>{dateTime(row.created_at)}</td>
-                        <td>{row.status || '—'}</td>
-                        <td>{dateTime(row.old_at)}</td>
-                        <td>{dateTime(row.new_at)}</td>
-                        <td>{row.new_type || '—'}</td>
-                        <td>{hours(row.old_h)}</td>
-                        <td>{hours(row.new_h)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : null}
+
+          <p className="sla-block-desc">
+            <strong>
+              Objednávky, kde se metody neshodnou na SLA 24 ({data.disagreements.length}
+              {data.disagreements.length === 200 ? '+' : ''})
+            </strong>
+            . „Hodin do kontaktu“ = doba od vzniku poptávky do prvního kontaktu podle dané metody,
+            pomlčka = metoda kontakt nemá. Seřazeno od největšího rozdílu.
+          </p>
+          <div className="drilldown-table-wrap">
+            <table className="drilldown-table">
+              <thead>
+                <tr>
+                  <th>Objednávka</th>
+                  <th>Vznik</th>
+                  <th>Stav</th>
+                  <th>Kontakt – stará (iframe)</th>
+                  <th>Kontakt – nová</th>
+                  {hasType ? <th>Typ kontaktu</th> : null}
+                  <th>Hodin do kontaktu – stará</th>
+                  <th>Hodin do kontaktu – nová</th>
+                  <th>Proč se liší</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.disagreements.map((row) => (
+                  <tr key={row.order_id}>
+                    <td>
+                      <a
+                        className="drilldown-detail-link"
+                        href={`${SYSTEEEM_ORDER_URL}${row.order_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {row.order_id}
+                      </a>
+                    </td>
+                    <td>{dateTime(row.created_at)}</td>
+                    <td>{row.status || '—'}</td>
+                    <td>{dateTime(row.old_at)}</td>
+                    <td>{dateTime(row.new_at)}</td>
+                    {hasType ? <td>{row.new_type || '—'}</td> : null}
+                    <td>{hours(row.old_h)}</td>
+                    <td>{hours(row.new_h)}</td>
+                    <td>{disagreementReason(row)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
-    </section>
+    </div>
   )
 }
