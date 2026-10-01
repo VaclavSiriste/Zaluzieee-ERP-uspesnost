@@ -42,6 +42,9 @@ export default function IncomingLoadComparePanel({ brandId = 'cz', brandLabel = 
   useEffect(() => {
     let cancelled = false
     async function load() {
+      // Počkat na hlavní SLA/callback requesty — méně paralelních Daktela spojení.
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      if (cancelled) return
       setLoading(true)
       setError('')
       try {

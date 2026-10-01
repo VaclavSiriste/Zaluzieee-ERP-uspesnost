@@ -207,26 +207,32 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   }, [brand.slaQueueBreakdown])
 
   useEffect(() => {
-    fetchData()
-    fetchCallbackData()
-    fetchTrasovacData()
+    let cancelled = false
 
-    // SK Railway reporting_ro má nízký connection limit — ERP endpointy nespouštět najednou
-    if (brand.id === 'sk') {
-      let cancelled = false
-      ;(async () => {
+    // Daktela endpointy nespouštět najednou — session pooler má málo slotů (EMAXCONNSESSION).
+    ;(async () => {
+      await fetchData()
+      if (cancelled) return
+      await fetchCallbackData()
+      if (cancelled) return
+      await fetchTrasovacData()
+      if (cancelled) return
+
+      if (brand.id === 'sk') {
         await fetchVycetSlaData()
         if (cancelled) return
         await fetchNavolaniData()
-      })()
-      return () => {
-        cancelled = true
+        return
       }
-    }
 
-    fetchNavolaniData()
-    fetchVycetSlaData()
-    return undefined
+      await fetchNavolaniData()
+      if (cancelled) return
+      await fetchVycetSlaData()
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [period, startDate, endDate, brand.id])
 
   useEffect(() => {

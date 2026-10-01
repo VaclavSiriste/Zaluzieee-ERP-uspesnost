@@ -3,7 +3,7 @@
  * GET /api/missed-call-callbacks?period=&startDate=&endDate=&variant=all|called_back|open&offset=&limit=
  */
 
-import { getDaktelaPool, resetDaktelaPool } from '@/lib/db-esm'
+import { getDaktelaPool, isPoolCapacityError, resetDaktelaPool } from '@/lib/db-esm'
 import { lookupOrdersByPhoneKeys, phoneKeyFromClid } from '@/lib/erp-phone-orders'
 import {
   buildMissedCallbackCte,
@@ -42,19 +42,26 @@ const TRANSIENT_DB_ERRORS = [
   'ETIMEDOUT',
   'ECONNRESET',
   'Connection terminated unexpectedly',
-  'terminating connection due to administrator command'
+  'terminating connection due to administrator command',
+  'EMAXCONNSESSION',
+  'max clients reached',
+  'too many connections',
+  'remaining connection slots'
 ]
 
 function isTransientDbError(error) {
   const message = String(error?.message || '')
-  return TRANSIENT_DB_ERRORS.some((needle) => message.includes(needle))
+  return (
+    isPoolCapacityError(error) ||
+    TRANSIENT_DB_ERRORS.some((needle) => message.includes(needle))
+  )
 }
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function queryWithRetry(sql, params = [], attempts = 4) {
+async function queryWithRetry(sql, params = [], attempts = 8) {
   let lastError
   for (let i = 0; i < attempts; i += 1) {
     try {
@@ -64,6 +71,10 @@ async function queryWithRetry(sql, params = [], attempts = 4) {
     } catch (error) {
       lastError = error
       if (!isTransientDbError(error) || i === attempts - 1) throw error
+      if (isPoolCapacityError(error)) {
+        await sleep(600 * (i + 1) * (i + 1))
+        continue
+      }
       const shouldUseFallback = String(error?.message || '').includes('ENOTFOUND')
       await resetDaktelaPool({ useFallbackOnNext: shouldUseFallback })
       await sleep(250 * (i + 1))
