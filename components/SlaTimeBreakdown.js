@@ -8,8 +8,49 @@ const GROUPS = [
 
 const MONTHS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro']
 
-/** Pod tímto počtem je procento nespolehlivé → sloupec se ztlumí. */
+/** Pod tímto jmenovatelem je SLA % nespolehlivé → číslo nad sloupcem šedě. */
 const LOW_VOLUME = 5
+
+/**
+ * Segmenty sloupce podle druhu SLA (zdola nahoru): splněno → zvednuto pozdě → nezvednuto.
+ * `pctNote` = jak se počítá SLA % (stejně jako hlavní číslo nad grafem).
+ */
+const KIND_CONFIG = {
+  incoming: {
+    unit: 'hovorů',
+    segments: [
+      { key: 'met', label: 'Zvednuto do 20 s', color: '#2a78d6' },
+      { key: 'late', label: 'Zvednuto po 20 s', color: '#9ec5f4' },
+      { key: 'missed', label: 'Nezvednuto', color: '#eb6834' }
+    ],
+    pctNote: 'SLA % = do 20 s / zvednuté'
+  },
+  incoming30: {
+    unit: 'hovorů',
+    segments: [
+      { key: 'met', label: 'Zvednuto do 30 s', color: '#2a78d6' },
+      { key: 'late', label: 'Zvednuto po 30 s', color: '#9ec5f4' },
+      { key: 'missed', label: 'Nezvednuto', color: '#eb6834' }
+    ],
+    pctNote: 'SLA % = do 30 s / všechny příchozí v pracovní době'
+  },
+  vycet: {
+    unit: 'poptávek',
+    segments: [
+      { key: 'met', label: 'Kontakt do 24 h', color: '#2a78d6' },
+      { key: 'missed', label: 'Bez kontaktu do 24 h', color: '#eb6834' }
+    ],
+    pctNote: 'SLA % = kontakt do 24 h / poptávky'
+  },
+  trasovac: {
+    unit: 'odbavených',
+    segments: [
+      { key: 'met', label: 'Odbaveno do 12 h', color: '#2a78d6' },
+      { key: 'missed', label: 'Odbaveno po 12 h', color: '#eb6834' }
+    ],
+    pctNote: 'SLA % = do 12 h / odbavené'
+  }
+}
 
 function bucketLabel(groupBy, bucket) {
   if (groupBy === 'hour') return `${bucket}`
@@ -29,9 +70,33 @@ function pctText(value) {
   return `${value.toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} %`
 }
 
+function num(value) {
+  return Number(value || 0).toLocaleString('cs-CZ')
+}
+
+/** Rozdělí sloupec na segmenty: splněno / zvednuto pozdě / nezvednuto. */
+function splitBucket(kind, b) {
+  if (kind === 'incoming' || kind === 'incoming30') {
+    return {
+      met: b.met,
+      late: Math.max(b.answered - b.met, 0),
+      missed: Math.max(b.total - b.answered, 0),
+      height: b.total
+    }
+  }
+  return { met: b.met, missed: Math.max(b.base - b.met, 0), height: b.base }
+}
+
+/** „Hezká“ horní mez osy (1, 2, 2.5, 5 × 10^n). */
+function niceMax(value) {
+  if (value <= 0) return 1
+  const pow = 10 ** Math.floor(Math.log10(value))
+  return [1, 2, 2.5, 5, 10].map((s) => s * pow).find((v) => v >= value) || value
+}
+
 /**
- * Časový rozpad SLA % — hodiny dne / dny / měsíce letošního roku.
- * kind: 'incoming' (SLA příchozí linky) | 'vycet' (Výčet SLA 24)
+ * Časový rozpad SLA — počty (barevně splněno / pozdě / nezvednuto) + SLA % nad sloupcem.
+ * kind: 'incoming' | 'incoming30' | 'vycet' | 'trasovac'
  */
 export default function SlaTimeBreakdown({
   kind,
@@ -39,9 +104,9 @@ export default function SlaTimeBreakdown({
   period,
   startDate = '',
   endDate = '',
-  baseLabel,
   defaultGroupBy = 'hour'
 }) {
+  const config = KIND_CONFIG[kind] || KIND_CONFIG.incoming
   const [groupBy, setGroupBy] = useState(defaultGroupBy)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -53,6 +118,7 @@ export default function SlaTimeBreakdown({
     async function load() {
       setLoading(true)
       setError('')
+      setHover(null)
       try {
         const params = new URLSearchParams({
           kind,
@@ -81,22 +147,25 @@ export default function SlaTimeBreakdown({
     }
   }, [kind, groupBy, brandId, period, startDate, endDate])
 
-  const buckets = data?.buckets || []
+  const buckets = (data?.buckets || []).map((b) => ({ ...b, parts: splitBucket(kind, b) }))
+  const yMax = niceMax(Math.max(0, ...buckets.map((b) => b.parts.height)))
   const width = 960
-  const height = 220
-  const pad = { top: 12, right: 8, bottom: 28, left: 40 }
+  const height = 250
+  const pad = { top: 24, right: 8, bottom: 28, left: 44 }
   const plotW = width - pad.left - pad.right
   const plotH = height - pad.top - pad.bottom
   const slot = buckets.length ? plotW / buckets.length : plotW
   const barW = Math.max(Math.min(slot - 2, 36), 2)
-  const y = (pct) => pad.top + plotH - (plotH * pct) / 100
+  const yOf = (value) => pad.top + plotH - (plotH * value) / yMax
   const labelEvery = buckets.length > 16 ? Math.ceil(buckets.length / 16) : 1
+  const showPct = barW >= 18
   const hovered = hover != null ? buckets[hover] : null
+  const ticks = [0, yMax / 2, yMax]
 
   return (
     <div className="sla-time">
       <div className="sla-time-head">
-        <p className="sla-time-title">Časový rozpad SLA %</p>
+        <p className="sla-time-title">Časový rozpad</p>
         <div className="sla-time-tabs" role="tablist" aria-label="Rozpad podle">
           {GROUPS.map((group) => (
             <button
@@ -114,58 +183,86 @@ export default function SlaTimeBreakdown({
       </div>
       <p className="sla-time-sub">
         {groupBy === 'hour'
-          ? 'Průměr za zvolené období podle hodiny, kdy hovor / poptávka přišla.'
+          ? 'Součet za zvolené období podle hodiny, kdy hovor / poptávka přišla.'
           : groupBy === 'day'
             ? 'Každý den zvoleného období.'
             : 'Měsíce letošního roku (filtr období se tady nepoužije).'}{' '}
-        Světlé sloupce = méně než {LOW_VOLUME} {baseLabel} (procento je nespolehlivé).
+        Výška sloupce = počet {config.unit}, číslo nad sloupcem = {config.pctNote}.
       </p>
 
-      {loading && !data ? <p className="sla-time-sub">Načítám…</p> : null}
+      <ul className="sla-time-legend">
+        {config.segments.map((segment) => (
+          <li key={segment.key}>
+            <span className="sla-time-swatch" style={{ background: segment.color }} aria-hidden="true" />
+            {segment.label}
+          </li>
+        ))}
+      </ul>
+
       {error ? <p className="danger">{error}</p> : null}
 
-      {data ? (
-        <div className="sla-time-chart" onMouseLeave={() => setHover(null)}>
-          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="SLA % v čase">
-            {[0, 50, 100].map((tick) => (
+      <div
+        className={`sla-time-chart${loading ? ' is-loading' : ''}`}
+        onMouseLeave={() => setHover(null)}
+        aria-busy={loading}
+      >
+        {loading ? (
+          <div className="sla-time-loading">
+            <span className="pauses-spinner" /> Načítám…
+          </div>
+        ) : null}
+        {data ? (
+          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="SLA v čase">
+            {ticks.map((tick) => (
               <g key={tick}>
-                <line
-                  x1={pad.left}
-                  x2={width - pad.right}
-                  y1={y(tick)}
-                  y2={y(tick)}
-                  className="sla-time-grid"
-                />
-                <text x={pad.left - 6} y={y(tick) + 4} className="sla-time-axis" textAnchor="end">
-                  {tick} %
+                <line x1={pad.left} x2={width - pad.right} y1={yOf(tick)} y2={yOf(tick)} className="sla-time-grid" />
+                <text x={pad.left - 6} y={yOf(tick) + 4} className="sla-time-axis" textAnchor="end">
+                  {num(Math.round(tick))}
                 </text>
               </g>
             ))}
             {buckets.map((b, index) => {
               const x = pad.left + index * slot + (slot - barW) / 2
-              const h = b.pct == null ? 0 : (plotH * b.pct) / 100
-              const r = Math.min(4, barW / 2, h)
-              const top = pad.top + plotH - h
-              const low = b.base < LOW_VOLUME
+              let acc = 0
+              const stacks = config.segments.map((segment) => {
+                const value = b.parts[segment.key] || 0
+                const y0 = acc
+                acc += value
+                return { ...segment, value, y0, y1: acc }
+              })
+              const lastIndex = stacks.map((stack) => stack.value > 0).lastIndexOf(true)
+              const topY = yOf(b.parts.height)
               return (
-                <g key={b.bucket}>
-                  {h > 0 ? (
-                    <path
-                      className={`sla-time-bar${low ? ' is-low' : ''}${hover === index ? ' is-hover' : ''}`}
-                      d={`M${x},${top + h} V${top + r} Q${x},${top} ${x + r},${top} H${x + barW - r} Q${x + barW},${top} ${x + barW},${top + r} V${top + h} Z`}
-                    />
-                  ) : null}
-                  {index % labelEvery === 0 ? (
+                <g key={b.bucket} className={hover === index ? 'is-hover' : ''}>
+                  {stacks.map((stack, i) =>
+                    stack.value > 0 ? (
+                      <rect
+                        key={stack.key}
+                        x={x}
+                        y={yOf(stack.y1)}
+                        width={barW}
+                        // 1 px mezera mezi segmenty
+                        height={Math.max(yOf(stack.y0) - yOf(stack.y1) - (i < lastIndex ? 1 : 0), 0.5)}
+                        fill={stack.color}
+                        rx={i === lastIndex ? 2 : 0}
+                      />
+                    ) : null
+                  )}
+                  {showPct && b.pct != null && b.parts.height > 0 ? (
                     <text
                       x={x + barW / 2}
-                      y={height - 10}
-                      className="sla-time-axis"
+                      y={topY - 5}
                       textAnchor="middle"
+                      className={`sla-time-pct${b.base < LOW_VOLUME ? ' is-low' : ''}`}
                     >
+                      {Math.round(b.pct)} %
+                    </text>
+                  ) : null}
+                  {index % labelEvery === 0 ? (
+                    <text x={x + barW / 2} y={height - 10} className="sla-time-axis" textAnchor="middle">
                       {bucketLabel(groupBy, b.bucket)}
                     </text>
                   ) : null}
-                  {/* širší neviditelná plocha pro hover */}
                   <rect
                     x={pad.left + index * slot}
                     y={pad.top}
@@ -173,25 +270,32 @@ export default function SlaTimeBreakdown({
                     height={plotH}
                     fill="transparent"
                     onMouseEnter={() => setHover(index)}
+                    onClick={() => setHover(index)}
                   />
                 </g>
               )
             })}
           </svg>
-          {hovered ? (
-            <div
-              className="sla-time-tip"
-              style={{ left: `${((pad.left + (hover + 0.5) * slot) / width) * 100}%` }}
-            >
-              <strong>{bucketTitle(groupBy, hovered.bucket)}</strong>
-              <span>SLA {pctText(hovered.pct)}</span>
-              <span>
-                {hovered.met.toLocaleString('cs-CZ')} / {hovered.base.toLocaleString('cs-CZ')} {baseLabel}
+        ) : null}
+        {hovered ? (
+          <div
+            className="sla-time-tip"
+            style={{ left: `${Math.min(Math.max(((pad.left + (hover + 0.5) * slot) / width) * 100, 12), 88)}%` }}
+          >
+            <strong>{bucketTitle(groupBy, hovered.bucket)}</strong>
+            <span>SLA {pctText(hovered.pct)}</span>
+            {config.segments.map((segment) => (
+              <span key={segment.key}>
+                <span className="sla-time-swatch" style={{ background: segment.color }} aria-hidden="true" />
+                {segment.label}: {num(hovered.parts[segment.key])}
               </span>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+            ))}
+            <span>
+              Celkem: {num(hovered.parts.height)} {config.unit}
+            </span>
+          </div>
+        ) : null}
+      </div>
 
       {data && buckets.length ? (
         <details className="sla-cmp-details">
@@ -201,18 +305,22 @@ export default function SlaTimeBreakdown({
               <thead>
                 <tr>
                   <th>{GROUPS.find((g) => g.key === groupBy)?.label}</th>
+                  <th>Celkem</th>
+                  {config.segments.map((segment) => (
+                    <th key={segment.key}>{segment.label}</th>
+                  ))}
                   <th>SLA %</th>
-                  <th>Splněno</th>
-                  <th>{baseLabel}</th>
                 </tr>
               </thead>
               <tbody>
                 {buckets.map((b) => (
                   <tr key={b.bucket}>
                     <td>{bucketTitle(groupBy, b.bucket)}</td>
+                    <td>{num(b.parts.height)}</td>
+                    {config.segments.map((segment) => (
+                      <td key={segment.key}>{num(b.parts[segment.key])}</td>
+                    ))}
                     <td>{pctText(b.pct)}</td>
-                    <td>{b.met}</td>
-                    <td>{b.base}</td>
                   </tr>
                 ))}
               </tbody>

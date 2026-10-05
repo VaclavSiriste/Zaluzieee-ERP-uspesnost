@@ -621,7 +621,6 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 period={period}
                 startDate={startDate}
                 endDate={endDate}
-                baseLabel="zvednutých hovorů"
               />
 
               {breakdownOpen ? (
@@ -771,7 +770,6 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 period={period}
                 startDate={startDate}
                 endDate={endDate}
-                baseLabel="příchozích v pracovní době"
               />
               {sla30Open ? (
                 <div className="sla-breakdown-stack">
@@ -884,7 +882,6 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                     period={period}
                     startDate={startDate}
                     endDate={endDate}
-                    baseLabel="poptávek"
                   />
                 ) : null
               }
@@ -1032,7 +1029,6 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                   period={period}
                   startDate={startDate}
                   endDate={endDate}
-                  baseLabel="odbavených"
                 />
               }
             />

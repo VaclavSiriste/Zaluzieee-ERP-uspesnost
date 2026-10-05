@@ -5540,3 +5540,67 @@ h6 {
   text-transform: uppercase;
   color: #64748b;
 }
+
+/* Časový rozpad – skládané počty */
+.sla-time-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: #1e2a52;
+}
+
+.sla-time-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.sla-time-chart.is-loading svg {
+  opacity: 0.3;
+  transition: opacity 0.15s ease;
+}
+
+.sla-time-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e2a52;
+}
+
+.sla-time-chart {
+  min-height: 120px;
+}
+
+.sla-time-chart g.is-hover rect:not([fill='transparent']) {
+  filter: brightness(0.88);
+}
+
+.sla-time-pct {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #1e2a52;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-time-pct.is-low {
+  fill: #94a3b8;
+}
+
+.sla-time-tip .sla-time-swatch {
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+}
