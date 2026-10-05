@@ -7,9 +7,11 @@ import ErpNavolaniDrilldown from '@/components/ErpNavolaniDrilldown'
 import FilterAssistant from '@/components/FilterAssistant'
 import IncomingLineSlaDrilldown from '@/components/IncomingLineSlaDrilldown'
 import IncomingLoadComparePanel from '@/components/IncomingLoadComparePanel'
+import LeadReasonPies from '@/components/LeadReasonPies'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
+import RegionSuccessPanel from '@/components/RegionSuccessPanel'
 import SlaComparePanel from '@/components/SlaComparePanel'
 import SlaDrilldown from '@/components/SlaDrilldown'
 import SlaTimeBreakdown from '@/components/SlaTimeBreakdown'
@@ -984,6 +986,18 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               source={navolaniSource}
             />
           ) : null}
+
+          {brand.showRegionSuccess ? (
+            <RegionSuccessPanel period={period} startDate={startDate} endDate={endDate} />
+          ) : null}
+
+          <LeadReasonPies
+            brandId={brand.id}
+            brandLabel={brand.pageTitle}
+            period={period}
+            startDate={startDate}
+            endDate={endDate}
+          />
 
           {!loading && !navolaniLoading && showTargets ? (
             <OperationsTargetsPanel
