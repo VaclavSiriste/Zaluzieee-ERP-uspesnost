@@ -5139,3 +5139,250 @@ h6 {
   pointer-events: none;
   box-shadow: 0 6px 18px rgba(30, 42, 82, 0.25);
 }
+
+/* ---- Leady podle důvodu – koláče ---- */
+.lr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.lr-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.lr-card-summary {
+  grid-column: 1 / -1;
+  background: #f8f9ff;
+}
+
+.lr-card-summary .lr-card-body {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+
+.lr-card-summary .lr-donut {
+  width: 200px;
+  height: 200px;
+}
+
+.lr-card-summary .lr-legend {
+  gap: 12px;
+}
+
+.lr-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.lr-card-num {
+  flex: 0 0 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #eef0ff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.lr-card-title {
+  margin: 0;
+  font-size: 15px;
+  color: #1e2a52;
+}
+
+.lr-card-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.lr-card-body {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.lr-donut {
+  width: 170px;
+  height: 170px;
+}
+
+.lr-donut path {
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.lr-donut-total {
+  font-size: 26px;
+  font-weight: 760;
+  fill: #1e2a52;
+}
+
+.lr-donut-caption {
+  font-size: 12px;
+  fill: #64748b;
+}
+
+.lr-legend {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lr-legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 52px;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #1e2a52;
+}
+
+.lr-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.lr-legend-label {
+  min-width: 0;
+}
+
+.lr-legend-sub {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.lr-legend-group {
+  align-items: start !important;
+}
+
+.lr-legend-group .lr-dot {
+  margin-top: 4px;
+}
+
+.lr-legend-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lr-legend-pct {
+  text-align: right;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.lr-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+@media (max-width: 1100px) {
+  .lr-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .lr-card-body {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+/* ---- Konverze po krajích ---- */
+.rf-table td {
+  white-space: nowrap;
+}
+
+.rf-table tr.is-service .rf-name {
+  font-weight: 700;
+}
+
+.rf-table tr.is-service .rf-name::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #2a78d6;
+  vertical-align: middle;
+}
+
+.rf-total td {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+.rf-leads,
+.rf-rate {
+  text-align: right;
+}
+
+.rf-stage {
+  min-width: 130px;
+}
+
+.rf-stage-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rf-stage-count {
+  font-weight: 650;
+}
+
+.rf-stage-rate {
+  color: #64748b;
+}
+
+.rf-track {
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: #eef0ff;
+  overflow: hidden;
+}
+
+.rf-bar {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.rf-bar-call { background: #86b6ef; }
+.rf-bar-meet { background: #2a78d6; }
+.rf-bar-win { background: #1baf7a; }
+
+/* Široké tabulky se posouvají uvnitř bloku, nerozšiřují stránku */
+.sla-page .dashboard-main > *,
+.sla-block > * {
+  min-width: 0;
+}
+
+.rf-stage {
+  min-width: 104px;
+}
+
+.sla-block {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rf-table th {
+  white-space: normal;
+  vertical-align: bottom;
+}
