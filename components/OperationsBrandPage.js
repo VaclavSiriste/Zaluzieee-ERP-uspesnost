@@ -741,7 +741,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             </section>
           ) : null}
 
-          {brand.showSla30Working && !loading && !error && metrics ? (
+          {!loading && !error && metrics ? (
             <section className={`sla-block sla-block-nested${sla30Open ? ' is-expanded' : ''}`}>
               <h2 className="sla-block-title">SLA příchozí linky — do 30 s, pracovní doba</h2>
               <p className="sla-block-desc">
