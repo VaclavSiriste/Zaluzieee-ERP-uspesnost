@@ -16,7 +16,8 @@ export default function VycetSlaPanel({
   organizationId = null,
   brandLabel = '',
   source = 'erp-db',
-  children = null
+  children = null,
+  timeBreakdown = null
 }) {
   if (!metrics) return null
 
@@ -64,6 +65,8 @@ export default function VycetSlaPanel({
         </span>
         <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
       </button>
+
+      {timeBreakdown}
 
       {expanded ? (
         <div className="sla-breakdown-stack" aria-label="Rozpad Výčet SLA">
