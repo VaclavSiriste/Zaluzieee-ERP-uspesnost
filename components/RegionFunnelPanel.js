@@ -91,6 +91,15 @@ export default function RegionFunnelPanel({ brandId, brandLabel, period, startDa
         (dopadlo zaměření ANO). Procenta jsou z leadů daného kraje. Čerstvé leady ještě nestihly
         projít celým trychtýřem, proto je u krátkého období konverze nižší — pro srovnání krajů
         volte delší období.
+        {venkovky ? null : (
+          <>
+            {' '}
+            <strong>Dvě procenta u navolání:</strong> „Dopadl hovor ANO“ = podíl ze všech leadů kraje
+            (i těch, kde ANO/NE ještě není vyplněno); „Úspěšnost navolání“ = ANO / (ANO + NE), jen leady
+            s vyplněným výsledkem. Souhrnná Úspěšnost navolání nahoře je ANO / (ANO + NE) podle data
+            navolání, tady podle data vzniku leadu — proto se může mírně lišit.
+          </>
+        )}
         {venkovky ? ' Venkovky nevyplňují ANO/NE sloupce — zaměření a zakázka jsou odvozené z jejich stavů.' : ''}
         {brandId === 'sk' ? ' Zvýrazněné jsou kraje, kam jezdíme.' : ''}
       </p>
@@ -104,12 +113,24 @@ export default function RegionFunnelPanel({ brandId, brandLabel, period, startDa
                 <th>Leady</th>
                 {venkovky ? null : (
                   <>
-                    <th>Dopadl hovor ANO</th>
-                    <th title="Dopadl hovor ANO / (ANO + NE)">Úspěšnost navolání</th>
+                    <th title="Kolik leadů z kraje má Dopadl hovor = ANO, % ze všech leadů kraje">
+                      Dopadl hovor ANO
+                      <span className="rf-th-sub">% ze všech leadů</span>
+                    </th>
+                    <th title="Dopadl hovor ANO / (ANO + NE) — leady bez vyplněného ANO/NE se nepočítají">
+                      Úspěšnost navolání
+                      <span className="rf-th-sub">ANO / (ANO + NE)</span>
+                    </th>
                   </>
                 )}
-                <th>Zaměření</th>
-                <th>Zakázka</th>
+                <th>
+                  Zaměření
+                  <span className="rf-th-sub">% ze všech leadů</span>
+                </th>
+                <th>
+                  Zakázka
+                  <span className="rf-th-sub">% ze všech leadů</span>
+                </th>
                 <th title="Zakázka / zaměření">Zaměření → zakázka</th>
                 {venkovky ? null : <th title="Dopadlo zaměření = čekáme">Čeká na výsledek</th>}
               </tr>

@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const kind = req.query.kind === 'vycet' ? 'vycet' : 'incoming'
+  const kind = ['vycet', 'incoming30', 'trasovac'].includes(req.query.kind) ? req.query.kind : 'incoming'
   const groupBy = GROUP_BY.includes(req.query.groupBy) ? req.query.groupBy : 'hour'
   const brandId = typeof req.query.brand === 'string' && req.query.brand ? req.query.brand : 'cz'
 

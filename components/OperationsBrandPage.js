@@ -158,6 +158,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const [error, setError] = useState('')
   const [navolaniError, setNavolaniError] = useState('')
   const [breakdownOpen, setBreakdownOpen] = useState(false)
+  const [sla30Open, setSla30Open] = useState(false)
   const [navolaniOpen, setNavolaniOpen] = useState(false)
   const [trasovaniOpen, setTrasovaniOpen] = useState(false)
   const [callbackOpen, setCallbackOpen] = useState(false)
@@ -740,6 +741,72 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             </section>
           ) : null}
 
+          {brand.showSla30Working && !loading && !error && metrics ? (
+            <section className={`sla-block sla-block-nested${sla30Open ? ' is-expanded' : ''}`}>
+              <h2 className="sla-block-title">SLA příchozí linky — do 30 s, pracovní doba</h2>
+              <p className="sla-block-desc">
+                Kolik ze všech příchozích hovorů v pracovní době (
+                {metrics.working_hours_short || 'Po–Pá 8–20 · So–Ne 10–18'}) jsme zvedli do 30 s.
+                Na rozdíl od SLA do 20 s se počítají i nezvednuté hovory. Stejné fronty jako SLA do 20 s.
+              </p>
+              <button
+                type="button"
+                className={`sla-kpi-root${sla30Open ? ' is-open' : ''}`}
+                onClick={() => setSla30Open((open) => !open)}
+                aria-expanded={sla30Open}
+              >
+                <span className="sla-kpi-label">SLA do 30 s · ze všech v pracovní době</span>
+                <strong className="sla-kpi-value">{formatPercent(metrics.sla_30s_working_pct)}</strong>
+                <span className="sla-kpi-hint">
+                  {(metrics.sla_30s_working || 0).toLocaleString('cs-CZ')} /{' '}
+                  {(metrics.working_incoming || 0).toLocaleString('cs-CZ')} příchozích v pracovní době
+                </span>
+                <span className="sla-kpi-root-toggle">{sla30Open ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
+              </button>
+              {sla30Open ? (
+                <div className="sla-breakdown-stack">
+                  <div className="sla-kpi-breakdown" aria-label="Rozpad SLA do 30 s">
+                    <article className="sla-kpi sla-kpi-child">
+                      <span className="sla-kpi-label">Příchozí v pracovní době</span>
+                      <DrilldownCount
+                        count={metrics.working_incoming}
+                        className="sla-kpi-value"
+                        onOpen={() => openMetric('working_all', 'Příchozí v pracovní době')}
+                      />
+                      <span className="sla-kpi-hint">jmenovatel, vč. nezvednutých</span>
+                    </article>
+                    <article className="sla-kpi sla-kpi-child">
+                      <span className="sla-kpi-label">Zvednuto do 30 s</span>
+                      <DrilldownCount
+                        count={metrics.sla_30s_working}
+                        className="sla-kpi-value"
+                        onOpen={() => openMetric('sla_30s_working', 'Zvednuto do 30 s (pracovní doba)')}
+                      />
+                      <span className="sla-kpi-hint">SLA splněno</span>
+                    </article>
+                    <article className="sla-kpi sla-kpi-child">
+                      <span className="sla-kpi-label">Nezvednuto nebo nad 30 s</span>
+                      <DrilldownCount
+                        count={Math.max((metrics.working_incoming || 0) - (metrics.sla_30s_working || 0), 0)}
+                        className="sla-kpi-value"
+                        onOpen={() => openMetric('working_not_30s', 'Nezvednuto nebo nad 30 s (pracovní doba)')}
+                      />
+                      <span className="sla-kpi-hint">SLA nesplněno</span>
+                    </article>
+                  </div>
+                  <SlaTimeBreakdown
+                    kind="incoming30"
+                    brandId={brand.id}
+                    period={period}
+                    startDate={startDate}
+                    endDate={endDate}
+                    baseLabel="příchozích v pracovní době"
+                  />
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           {!loading && !error && metrics ? (
             <section className="sla-block sla-block-nested sla-block-hours">
               <h2 className="sla-block-title">
@@ -952,7 +1019,16 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               onOpenMetric={openTrasovacMetric}
               brandLabel={brand.pageTitle}
               organizationId={brand.organizationId}
-            />
+            >
+              <SlaTimeBreakdown
+                kind="trasovac"
+                brandId={brand.id}
+                period={period}
+                startDate={startDate}
+                endDate={endDate}
+                baseLabel="odbavených"
+              />
+            </TrasovacResponsePanel>
           ) : null}
 
           {showTrasovaniSuccess &&

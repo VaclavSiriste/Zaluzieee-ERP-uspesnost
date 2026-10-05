@@ -38,7 +38,8 @@ export default function TrasovacResponsePanel({
   onToggle,
   onOpenMetric,
   brandLabel = 'zaluzieee - CZ',
-  organizationId = null
+  organizationId = null,
+  children = null
 }) {
   if (!metrics) return null
 
@@ -224,6 +225,7 @@ export default function TrasovacResponsePanel({
               ))}
             </div>
           ) : null}
+          {children}
         </>
       ) : null}
     </section>

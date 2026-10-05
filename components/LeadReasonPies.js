@@ -184,68 +184,81 @@ function CategoryPie({ index, category }) {
   )
 }
 
+/** Odstíny jedné barvy pro důvody uvnitř kategorie (sytá → světlejší). */
+const SHADES = [1, 0.78, 0.6, 0.45, 0.34]
+
 function SummaryPie({ data }) {
   const [hover, setHover] = useState(null)
-  const inner = data.categories.map((category) => ({
-    hoverKey: category.key,
-    label: category.label,
-    count: category.total,
-    color: CATEGORY_COLORS[category.key]
-  }))
-  // vnější prstenec: důvody ve barvě své kategorie, střídavě sytě/světleji
-  const outer = data.categories.flatMap((category) =>
-    category.reasons.map((reason, i) => ({
+  // jeden kruh: všechny důvody, seřazené po kategoriích, barva = kategorie, odstín = pořadí
+  const groups = data.categories.map((category) => ({
+    ...category,
+    color: CATEGORY_COLORS[category.key],
+    reasons: category.reasons.map((reason, i) => ({
       ...reason,
       hoverKey: `${category.key}-${reason.key}`,
       group: category.key,
       color: CATEGORY_COLORS[category.key],
-      opacity: i % 2 === 0 ? 0.85 : 0.5
+      opacity: SHADES[Math.min(i, SHADES.length - 1)]
     }))
-  )
+  }))
+  const slices = groups.flatMap((group) => group.reasons)
+
   return (
     <article className="lr-card lr-card-summary">
       <header className="lr-card-head">
         <span className="lr-card-num">4</span>
         <div>
-          <h3 className="lr-card-title">Souhrn všech tří</h3>
+          <h3 className="lr-card-title">Souhrn – všechny důvody v jednom</h3>
           <p className="lr-card-hint">
-            Vnitřní kruh = poměr kategorií, vnější = jednotlivé důvody v barvě své kategorie. Najeďte
-            myší na výseč nebo řádek legendy.
+            Každá výseč je jeden důvod, barva = kategorie. Procenta jsou ze všech {data.total.toLocaleString('cs-CZ')}{' '}
+            leadů. Najeďte myší na výseč, kategorii nebo důvod v legendě.
           </p>
         </div>
       </header>
       <div className="lr-card-body">
-        <Donut total={data.total} caption="Souhrn kategorií" hover={hover}>
-          <Ring items={outer} total={data.total} rOuter={96} rInner={74} gap={0.006} hover={hover} onHover={setHover} />
-          <Ring items={inner} total={data.total} rOuter={70} rInner={46} hover={hover} onHover={setHover} />
+        <Donut total={data.total} caption="Souhrn všech důvodů" hover={hover}>
+          <Ring items={slices} total={data.total} rOuter={96} rInner={58} gap={0.008} hover={hover} onHover={setHover} />
         </Donut>
-        <ul className="lr-legend">
-          {data.categories.map((category) => {
-            const focus = { hoverKey: category.key, label: category.label, count: category.total }
-            const isHover = hover && (hover.hoverKey === category.key || hover.group === category.key)
+        <div className="lr-summary-legend">
+          {groups.map((group) => {
+            const groupFocus = { hoverKey: group.key, label: group.label, count: group.total }
+            const groupHover = hover && (hover.hoverKey === group.key || hover.group === group.key)
             return (
-              <li
-                key={category.key}
-                className={`lr-legend-item lr-legend-group${isHover ? ' is-hover' : ''}${hover && !isHover ? ' is-dim' : ''}`}
-                onMouseEnter={() => setHover(focus)}
-                onMouseLeave={() => setHover(null)}
-              >
-                <span className="lr-dot" style={{ background: CATEGORY_COLORS[category.key] }} aria-hidden="true" />
-                <span className="lr-legend-label">
-                  <strong>{category.label}</strong>
-                  <span className="lr-legend-sub">
-                    {category.reasons
-                      .slice(0, 3)
-                      .map((r) => `${r.label} ${pct(r.count, category.total)}`)
-                      .join(' · ') || '—'}
-                  </span>
-                </span>
-                <span className="lr-legend-count">{category.total}</span>
-                <span className="lr-legend-pct">{pct(category.total, data.total)}</span>
-              </li>
+              <div key={group.key} className={`lr-summary-group${hover && !groupHover ? ' is-dim' : ''}`}>
+                <div
+                  className={`lr-summary-head${hover && hover.hoverKey === group.key ? ' is-hover' : ''}`}
+                  onMouseEnter={() => setHover(groupFocus)}
+                  onMouseLeave={() => setHover(null)}
+                >
+                  <span className="lr-dot" style={{ background: group.color }} aria-hidden="true" />
+                  <strong>{group.label}</strong>
+                  <span className="lr-legend-count">{group.total}</span>
+                  <span className="lr-legend-pct">{pct(group.total, data.total)}</span>
+                </div>
+                <ul className="lr-legend">
+                  {group.reasons.map((reason) => {
+                    const isHover = hover && hover.hoverKey === reason.hoverKey
+                    return (
+                      <li
+                        key={reason.hoverKey}
+                        className={`lr-legend-item${isHover ? ' is-hover' : ''}`}
+                        onMouseEnter={() =>
+                          setHover({ hoverKey: reason.hoverKey, group: group.key, label: reason.label, count: reason.count })
+                        }
+                        onMouseLeave={() => setHover(null)}
+                      >
+                        <span className="lr-dot" style={{ background: group.color, opacity: reason.opacity }} aria-hidden="true" />
+                        <span className="lr-legend-label">{reason.label}</span>
+                        <span className="lr-legend-count">{reason.count}</span>
+                        <span className="lr-legend-pct">{pct(reason.count, data.total)}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
             )
           })}
-        </ul>
+        </div>
       </div>
     </article>
   )

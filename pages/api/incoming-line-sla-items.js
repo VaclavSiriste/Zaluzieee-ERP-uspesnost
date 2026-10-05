@@ -74,7 +74,7 @@ export default async function handler(req, res) {
       period
     })
     const params = [rangeStart, rangeEnd]
-    const metricFilter = incomingLineMetricFilter(metric)
+    const metricFilter = incomingLineMetricFilter(metric, { brandId })
 
     const countSql = `
       SELECT COUNT(*)::int AS total
