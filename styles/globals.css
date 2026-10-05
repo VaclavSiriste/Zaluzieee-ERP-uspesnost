@@ -5386,3 +5386,36 @@ h6 {
   white-space: normal;
   vertical-align: bottom;
 }
+
+/* Hover na koláčích */
+.lr-slice {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.lr-slice.is-hover {
+  stroke: #1e2a52;
+  stroke-width: 1.5;
+}
+
+.lr-center-label {
+  font-size: 10px;
+  font-weight: 650;
+  fill: #475569;
+}
+
+.lr-legend-item {
+  padding: 2px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.lr-legend-item.is-hover {
+  background: #eef0ff;
+}
+
+.lr-legend-item.is-dim {
+  opacity: 0.45;
+}

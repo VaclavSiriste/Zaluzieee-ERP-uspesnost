@@ -33,7 +33,20 @@ function arcPath(cx, cy, rOuter, rInner, a0, a1) {
   return `M${p(rOuter, a0)} A${rOuter},${rOuter} 0 ${large} 1 ${p(rOuter, a1)} L${p(rInner, a1)} A${rInner},${rInner} 0 ${large} 0 ${p(rInner, a0)} Z`
 }
 
-function Ring({ items, total, rOuter, rInner, gap = 0.012 }) {
+/**
+ * Výseč je „aktivní“, když je pod myší ona sama, její kategorie (souhrn: vnitřní kruh
+ * zvýrazní své důvody ve vnějším) nebo když je pod myší některý z jejích důvodů.
+ */
+function isActive(hover, item) {
+  if (!hover) return true
+  return (
+    hover.hoverKey === item.hoverKey ||
+    (item.group && hover.hoverKey === item.group) ||
+    (hover.group && hover.group === item.hoverKey)
+  )
+}
+
+function Ring({ items, total, rOuter, rInner, gap = 0.012, hover, onHover }) {
   let angle = 0
   return items.map((item) => {
     const sweep = total ? (item.count / total) * Math.PI * 2 : 0
@@ -41,50 +54,113 @@ function Ring({ items, total, rOuter, rInner, gap = 0.012 }) {
     const a1 = angle + sweep - (items.length > 1 ? gap / 2 : 0)
     angle += sweep
     if (a1 <= a0) return null
+    const active = isActive(hover, item)
+    const focus = { hoverKey: item.hoverKey, group: item.group, label: item.label, count: item.count }
     return (
-      <path key={item.key + item.label} d={arcPath(100, 100, rOuter, rInner, a0, a1)} fill={item.color} opacity={item.opacity ?? 1}>
+      <path
+        key={item.hoverKey}
+        d={arcPath(100, 100, rOuter, rInner, a0, a1)}
+        fill={item.color}
+        opacity={active ? item.opacity ?? 1 : 0.18}
+        className={`lr-slice${hover && hover.hoverKey === item.hoverKey ? ' is-hover' : ''}`}
+        onMouseEnter={() => onHover(focus)}
+        onMouseLeave={() => onHover(null)}
+        onClick={() => onHover(hover && hover.hoverKey === item.hoverKey ? null : focus)}
+      >
         <title>{`${item.label}: ${item.count} (${pct(item.count, total)})`}</title>
       </path>
     )
   })
 }
 
-function Donut({ children, total, caption }) {
+/** Popisek do středu koláče — dlouhé názvy zkrátit na dva řádky. */
+function splitLabel(label, max = 20) {
+  const words = String(label).split(' ')
+  const lines = ['']
+  for (const word of words) {
+    const current = lines[lines.length - 1]
+    if ((current + ' ' + word).trim().length > max && current) {
+      if (lines.length === 2) {
+        lines[1] = `${lines[1].slice(0, max - 1)}…`
+        break
+      }
+      lines.push(word)
+    } else {
+      lines[lines.length - 1] = `${current} ${word}`.trim()
+    }
+  }
+  return lines
+}
+
+function Donut({ children, total, caption, hover }) {
+  const lines = hover ? splitLabel(hover.label) : []
   return (
     <svg viewBox="0 0 200 200" className="lr-donut" role="img" aria-label={caption}>
       {children}
-      <text x="100" y="96" textAnchor="middle" className="lr-donut-total">
-        {total.toLocaleString('cs-CZ')}
-      </text>
-      <text x="100" y="116" textAnchor="middle" className="lr-donut-caption">
-        leadů
-      </text>
+      {hover ? (
+        <g className="lr-center" pointerEvents="none">
+          <text x="100" y={lines.length > 1 ? 80 : 86} textAnchor="middle" className="lr-center-label">
+            {lines.map((line, i) => (
+              <tspan key={i} x="100" dy={i ? 12 : 0}>
+                {line}
+              </tspan>
+            ))}
+          </text>
+          <text x="100" y="112" textAnchor="middle" className="lr-donut-total">
+            {hover.count.toLocaleString('cs-CZ')}
+          </text>
+          <text x="100" y="128" textAnchor="middle" className="lr-donut-caption">
+            {pct(hover.count, total)}
+          </text>
+        </g>
+      ) : (
+        <g pointerEvents="none">
+          <text x="100" y="96" textAnchor="middle" className="lr-donut-total">
+            {total.toLocaleString('cs-CZ')}
+          </text>
+          <text x="100" y="116" textAnchor="middle" className="lr-donut-caption">
+            leadů
+          </text>
+        </g>
+      )}
     </svg>
   )
 }
 
 /** Legenda vždy vypíše všechny důvody — ty sloučené v grafu do „Ostatní“ mají šedou tečku. */
-function Legend({ reasons, total }) {
+function Legend({ reasons, total, hover, onHover }) {
   return (
     <ul className="lr-legend">
-      {reasons.map((reason, index) => (
-        <li key={reason.key + reason.label}>
-          <span
-            className="lr-dot"
-            style={{ background: index < MAX_SLICES ? SERIES[index] : OTHER }}
-            aria-hidden="true"
-          />
-          <span className="lr-legend-label">{reason.label}</span>
-          <span className="lr-legend-count">{reason.count}</span>
-          <span className="lr-legend-pct">{pct(reason.count, total)}</span>
-        </li>
-      ))}
+      {reasons.map((reason, index) => {
+        const folded = index >= MAX_SLICES
+        const focus = { hoverKey: folded ? 'ostatni' : reason.key, label: reason.label, count: reason.count }
+        const isHover =
+          hover && (hover.label === reason.label || (folded && hover.hoverKey === 'ostatni' && hover.label.startsWith('Ostatní')))
+        return (
+          <li
+            key={reason.key + reason.label}
+            className={`lr-legend-item${isHover ? ' is-hover' : ''}${hover && !isHover ? ' is-dim' : ''}`}
+            onMouseEnter={() => onHover(focus)}
+            onMouseLeave={() => onHover(null)}
+          >
+            <span
+              className="lr-dot"
+              style={{ background: folded ? OTHER : SERIES[index] }}
+              aria-hidden="true"
+            />
+            <span className="lr-legend-label">{reason.label}</span>
+            <span className="lr-legend-count">{reason.count}</span>
+            <span className="lr-legend-pct">{pct(reason.count, total)}</span>
+          </li>
+        )
+      })}
     </ul>
   )
 }
 
 function CategoryPie({ index, category }) {
-  const slices = toSlices(category.reasons)
+  const [hover, setHover] = useState(null)
+  const slices = toSlices(category.reasons).map((slice) => ({ ...slice, hoverKey: slice.key }))
   return (
     <article className="lr-card">
       <header className="lr-card-head">
@@ -96,10 +172,10 @@ function CategoryPie({ index, category }) {
       </header>
       {category.total ? (
         <div className="lr-card-body">
-          <Donut total={category.total} caption={category.label}>
-            <Ring items={slices} total={category.total} rOuter={92} rInner={58} />
+          <Donut total={category.total} caption={category.label} hover={hover}>
+            <Ring items={slices} total={category.total} rOuter={92} rInner={58} hover={hover} onHover={setHover} />
           </Donut>
-          <Legend reasons={category.reasons} total={category.total} />
+          <Legend reasons={category.reasons} total={category.total} hover={hover} onHover={setHover} />
         </div>
       ) : (
         <p className="lr-empty">V období žádné leady v této kategorii.</p>
@@ -109,8 +185,9 @@ function CategoryPie({ index, category }) {
 }
 
 function SummaryPie({ data }) {
+  const [hover, setHover] = useState(null)
   const inner = data.categories.map((category) => ({
-    key: category.key,
+    hoverKey: category.key,
     label: category.label,
     count: category.total,
     color: CATEGORY_COLORS[category.key]
@@ -119,7 +196,8 @@ function SummaryPie({ data }) {
   const outer = data.categories.flatMap((category) =>
     category.reasons.map((reason, i) => ({
       ...reason,
-      key: `${category.key}-${reason.key}`,
+      hoverKey: `${category.key}-${reason.key}`,
+      group: category.key,
       color: CATEGORY_COLORS[category.key],
       opacity: i % 2 === 0 ? 0.85 : 0.5
     }))
@@ -131,33 +209,42 @@ function SummaryPie({ data }) {
         <div>
           <h3 className="lr-card-title">Souhrn všech tří</h3>
           <p className="lr-card-hint">
-            Vnitřní kruh = poměr kategorií, vnější = jednotlivé důvody v barvě své kategorie
-            (najeďte myší pro název).
+            Vnitřní kruh = poměr kategorií, vnější = jednotlivé důvody v barvě své kategorie. Najeďte
+            myší na výseč nebo řádek legendy.
           </p>
         </div>
       </header>
       <div className="lr-card-body">
-        <Donut total={data.total} caption="Souhrn kategorií">
-          <Ring items={outer} total={data.total} rOuter={96} rInner={74} gap={0.006} />
-          <Ring items={inner} total={data.total} rOuter={70} rInner={46} />
+        <Donut total={data.total} caption="Souhrn kategorií" hover={hover}>
+          <Ring items={outer} total={data.total} rOuter={96} rInner={74} gap={0.006} hover={hover} onHover={setHover} />
+          <Ring items={inner} total={data.total} rOuter={70} rInner={46} hover={hover} onHover={setHover} />
         </Donut>
         <ul className="lr-legend">
-          {data.categories.map((category) => (
-            <li key={category.key} className="lr-legend-group">
-              <span className="lr-dot" style={{ background: CATEGORY_COLORS[category.key] }} aria-hidden="true" />
-              <span className="lr-legend-label">
-                <strong>{category.label}</strong>
-                <span className="lr-legend-sub">
-                  {category.reasons
-                    .slice(0, 3)
-                    .map((r) => `${r.label} ${pct(r.count, category.total)}`)
-                    .join(' · ') || '—'}
+          {data.categories.map((category) => {
+            const focus = { hoverKey: category.key, label: category.label, count: category.total }
+            const isHover = hover && (hover.hoverKey === category.key || hover.group === category.key)
+            return (
+              <li
+                key={category.key}
+                className={`lr-legend-item lr-legend-group${isHover ? ' is-hover' : ''}${hover && !isHover ? ' is-dim' : ''}`}
+                onMouseEnter={() => setHover(focus)}
+                onMouseLeave={() => setHover(null)}
+              >
+                <span className="lr-dot" style={{ background: CATEGORY_COLORS[category.key] }} aria-hidden="true" />
+                <span className="lr-legend-label">
+                  <strong>{category.label}</strong>
+                  <span className="lr-legend-sub">
+                    {category.reasons
+                      .slice(0, 3)
+                      .map((r) => `${r.label} ${pct(r.count, category.total)}`)
+                      .join(' · ') || '—'}
+                  </span>
                 </span>
-              </span>
-              <span className="lr-legend-count">{category.total}</span>
-              <span className="lr-legend-pct">{pct(category.total, data.total)}</span>
-            </li>
-          ))}
+                <span className="lr-legend-count">{category.total}</span>
+                <span className="lr-legend-pct">{pct(category.total, data.total)}</span>
+              </li>
+            )
+          })}
         </ul>
       </div>
     </article>
