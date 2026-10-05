@@ -63,15 +63,20 @@ function Donut({ children, total, caption }) {
   )
 }
 
-function Legend({ slices, total }) {
+/** Legenda vždy vypíše všechny důvody — ty sloučené v grafu do „Ostatní“ mají šedou tečku. */
+function Legend({ reasons, total }) {
   return (
     <ul className="lr-legend">
-      {slices.map((slice) => (
-        <li key={slice.key + slice.label} title={slice.folded ? slice.folded.map((r) => `${r.label}: ${r.count}`).join('\n') : undefined}>
-          <span className="lr-dot" style={{ background: slice.color }} aria-hidden="true" />
-          <span className="lr-legend-label">{slice.label}</span>
-          <span className="lr-legend-count">{slice.count}</span>
-          <span className="lr-legend-pct">{pct(slice.count, total)}</span>
+      {reasons.map((reason, index) => (
+        <li key={reason.key + reason.label}>
+          <span
+            className="lr-dot"
+            style={{ background: index < MAX_SLICES ? SERIES[index] : OTHER }}
+            aria-hidden="true"
+          />
+          <span className="lr-legend-label">{reason.label}</span>
+          <span className="lr-legend-count">{reason.count}</span>
+          <span className="lr-legend-pct">{pct(reason.count, total)}</span>
         </li>
       ))}
     </ul>
@@ -94,7 +99,7 @@ function CategoryPie({ index, category }) {
           <Donut total={category.total} caption={category.label}>
             <Ring items={slices} total={category.total} rOuter={92} rInner={58} />
           </Donut>
-          <Legend slices={slices} total={category.total} />
+          <Legend reasons={category.reasons} total={category.total} />
         </div>
       ) : (
         <p className="lr-empty">V období žádné leady v této kategorii.</p>

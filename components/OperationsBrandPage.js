@@ -11,7 +11,7 @@ import LeadReasonPies from '@/components/LeadReasonPies'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
 import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
-import RegionSuccessPanel from '@/components/RegionSuccessPanel'
+import RegionFunnelPanel from '@/components/RegionFunnelPanel'
 import SlaComparePanel from '@/components/SlaComparePanel'
 import SlaDrilldown from '@/components/SlaDrilldown'
 import SlaTimeBreakdown from '@/components/SlaTimeBreakdown'
@@ -987,9 +987,15 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
             />
           ) : null}
 
-          {brand.showRegionSuccess ? (
-            <RegionSuccessPanel period={period} startDate={startDate} endDate={endDate} />
-          ) : null}
+          {brand.navolaniSource === 'ovt-sheet' ? null : (
+            <RegionFunnelPanel
+              brandId={brand.id}
+              brandLabel={brand.pageTitle}
+              period={period}
+              startDate={startDate}
+              endDate={endDate}
+            />
+          )}
 
           <LeadReasonPies
             brandId={brand.id}

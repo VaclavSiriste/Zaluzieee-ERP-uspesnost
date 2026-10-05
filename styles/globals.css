@@ -5303,56 +5303,86 @@ h6 {
   }
 }
 
-/* ---- Úspěšnost navolání podle krajů ---- */
-.rs-list {
-  display: grid;
+/* ---- Konverze po krajích ---- */
+.rf-table td {
+  white-space: nowrap;
+}
+
+.rf-table tr.is-service .rf-name {
+  font-weight: 700;
+}
+
+.rf-table tr.is-service .rf-name::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #2a78d6;
+  vertical-align: middle;
+}
+
+.rf-total td {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+.rf-leads,
+.rf-rate {
+  text-align: right;
+}
+
+.rf-stage {
+  min-width: 130px;
+}
+
+.rf-stage-top {
+  display: flex;
+  justify-content: space-between;
   gap: 8px;
-  padding: 16px;
-  border: 1px solid #e3e7ff;
-  border-radius: 16px;
-  background: #fff;
 }
 
-.rs-row {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 64px 64px;
-  gap: 12px;
-  align-items: center;
-  font-size: 13px;
-  color: #64748b;
-}
-
-.rs-row.is-service {
-  color: #1e2a52;
+.rf-stage-count {
   font-weight: 650;
 }
 
-.rs-track {
-  height: 14px;
-  border-radius: 4px;
-  background: #f1f5f9;
+.rf-stage-rate {
+  color: #64748b;
+}
+
+.rf-track {
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: #eef0ff;
   overflow: hidden;
 }
 
-.rs-bar {
+.rf-bar {
   height: 100%;
-  border-radius: 0 4px 4px 0;
-  background: #b8bcc6;
+  border-radius: 3px;
 }
 
-.rs-row.is-service .rs-bar {
-  background: #2a78d6;
+.rf-bar-call { background: #86b6ef; }
+.rf-bar-meet { background: #2a78d6; }
+.rf-bar-win { background: #1baf7a; }
+
+/* Široké tabulky se posouvají uvnitř bloku, nerozšiřují stránku */
+.sla-page .dashboard-main > *,
+.sla-block > * {
+  min-width: 0;
 }
 
-.rs-value {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.rf-stage {
+  min-width: 104px;
 }
 
-.rs-count {
-  text-align: right;
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
+.sla-block {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rf-table th {
+  white-space: normal;
+  vertical-align: bottom;
 }
