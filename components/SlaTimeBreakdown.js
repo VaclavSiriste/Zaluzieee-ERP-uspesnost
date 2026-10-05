@@ -33,8 +33,16 @@ function pctText(value) {
  * Časový rozpad SLA % — hodiny dne / dny / měsíce letošního roku.
  * kind: 'incoming' (SLA příchozí linky) | 'vycet' (Výčet SLA 24)
  */
-export default function SlaTimeBreakdown({ kind, brandId, period, startDate = '', endDate = '', baseLabel }) {
-  const [groupBy, setGroupBy] = useState('hour')
+export default function SlaTimeBreakdown({
+  kind,
+  brandId,
+  period,
+  startDate = '',
+  endDate = '',
+  baseLabel,
+  defaultGroupBy = 'hour'
+}) {
+  const [groupBy, setGroupBy] = useState(defaultGroupBy)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

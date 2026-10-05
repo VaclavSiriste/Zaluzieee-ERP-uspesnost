@@ -14,6 +14,7 @@ import PauseDrilldown from '@/components/PauseDrilldown'
 import RegionFunnelPanel from '@/components/RegionFunnelPanel'
 import SlaComparePanel from '@/components/SlaComparePanel'
 import SlaDrilldown from '@/components/SlaDrilldown'
+import Sla30Reasons from '@/components/Sla30Reasons'
 import SlaTimeBreakdown from '@/components/SlaTimeBreakdown'
 import TrasovacResponseDrilldown from '@/components/TrasovacResponseDrilldown'
 import TrasovacResponsePanel from '@/components/TrasovacResponsePanel'
@@ -614,6 +615,15 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 <span className="sla-kpi-root-toggle">{breakdownOpen ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
               </button>
 
+              <SlaTimeBreakdown
+                kind="incoming"
+                brandId={brand.id}
+                period={period}
+                startDate={startDate}
+                endDate={endDate}
+                baseLabel="zvednutých hovorů"
+              />
+
               {breakdownOpen ? (
                 <div className="sla-breakdown-stack" aria-label="Rozpad SLA">
                   {metrics.queue_breakdown?.items?.length ? (
@@ -728,14 +738,6 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                     ))}
                   </div>
 
-                  <SlaTimeBreakdown
-                    kind="incoming"
-                    brandId={brand.id}
-                    period={period}
-                    startDate={startDate}
-                    endDate={endDate}
-                    baseLabel="zvednutých hovorů"
-                  />
                 </div>
               ) : null}
             </section>
@@ -763,6 +765,14 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                 </span>
                 <span className="sla-kpi-root-toggle">{sla30Open ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
               </button>
+              <SlaTimeBreakdown
+                kind="incoming30"
+                brandId={brand.id}
+                period={period}
+                startDate={startDate}
+                endDate={endDate}
+                baseLabel="příchozích v pracovní době"
+              />
               {sla30Open ? (
                 <div className="sla-breakdown-stack">
                   <div className="sla-kpi-breakdown" aria-label="Rozpad SLA do 30 s">
@@ -794,14 +804,7 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
                       <span className="sla-kpi-hint">SLA nesplněno</span>
                     </article>
                   </div>
-                  <SlaTimeBreakdown
-                    kind="incoming30"
-                    brandId={brand.id}
-                    period={period}
-                    startDate={startDate}
-                    endDate={endDate}
-                    baseLabel="příchozích v pracovní době"
-                  />
+                  <Sla30Reasons brandId={brand.id} period={period} startDate={startDate} endDate={endDate} />
                 </div>
               ) : null}
             </section>
@@ -872,17 +875,20 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               organizationId={brand.organizationId}
               brandLabel={brand.pageTitle}
               source={vycetSlaSource}
+              timeBreakdown={
+                vycetSlaConfigured ? (
+                  <SlaTimeBreakdown
+                    kind="vycet"
+                    brandId={brand.id}
+                    defaultGroupBy={brand.vycetSlaSource === 'ovt-sheet' ? 'day' : 'hour'}
+                    period={period}
+                    startDate={startDate}
+                    endDate={endDate}
+                    baseLabel="poptávek"
+                  />
+                ) : null
+              }
             >
-              {vycetSlaSource === 'erp-db' ? (
-                <SlaTimeBreakdown
-                  kind="vycet"
-                  brandId={brand.id}
-                  period={period}
-                  startDate={startDate}
-                  endDate={endDate}
-                  baseLabel="poptávek"
-                />
-              ) : null}
               {brand.showSlaCompare ? (
                 <SlaComparePanel
                   period={period}
@@ -1019,16 +1025,17 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               onOpenMetric={openTrasovacMetric}
               brandLabel={brand.pageTitle}
               organizationId={brand.organizationId}
-            >
-              <SlaTimeBreakdown
-                kind="trasovac"
-                brandId={brand.id}
-                period={period}
-                startDate={startDate}
-                endDate={endDate}
-                baseLabel="odbavených"
-              />
-            </TrasovacResponsePanel>
+              timeBreakdown={
+                <SlaTimeBreakdown
+                  kind="trasovac"
+                  brandId={brand.id}
+                  period={period}
+                  startDate={startDate}
+                  endDate={endDate}
+                  baseLabel="odbavených"
+                />
+              }
+            />
           ) : null}
 
           {showTrasovaniSuccess &&

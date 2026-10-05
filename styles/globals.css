@@ -5470,3 +5470,73 @@ h6 {
   text-transform: none;
   color: #64748b;
 }
+
+/* SLA 30 s – důvody nesplnění */
+.s30 {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.s30-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e2a52;
+}
+
+.s30-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.s30-row {
+  cursor: pointer;
+}
+
+.s30-row.is-open td {
+  background: #eef0ff;
+}
+
+.s30-caret {
+  display: inline-block;
+  width: 12px;
+  color: #4f46e5;
+}
+
+.s30-hint {
+  display: block;
+  margin-left: 16px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.s30-items td {
+  background: #f8f9ff;
+  padding: 8px 12px 12px;
+}
+
+.s30-items-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.s30-items-table th,
+.s30-items-table td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid #eef0ff;
+  background: transparent;
+}
+
+.s30-items-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #64748b;
+}
