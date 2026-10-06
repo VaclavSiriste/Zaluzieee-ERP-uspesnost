@@ -5612,3 +5612,70 @@ h6 {
   justify-content: space-between;
   gap: 8px;
 }
+
+/* ---- Fronty – nenavolané leady ---- */
+.fronty-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fronty-tab {
+  appearance: none;
+  border: 1px solid #d8deff;
+  background: #fff;
+  color: #1e2a52;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fronty-tab:hover {
+  border-color: #7c83ff;
+}
+
+.fronty-tab.is-active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.fronty-table-wrap {
+  overflow-x: auto;
+}
+
+.fronty-cell {
+  text-align: center;
+  min-width: 48px;
+}
+
+.fronty-table th,
+.fronty-table td {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.fronty-total td {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+.fronty-table-wrap td {
+  white-space: nowrap;
+}
+
+.fronty-table-wrap td {
+  white-space: nowrap;
+}
+
+/* Mřížky s tabulkami nesmí přetéct kartu – tabulka se posouvá uvnitř */
+.sla-cmp {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sla-cmp > *,
+.sla-breakdown-stack > * {
+  min-width: 0;
+}
