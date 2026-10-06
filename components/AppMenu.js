@@ -98,6 +98,9 @@ export default function AppMenu({ active = 'dashboard' }) {
             <li className={active === 'operations-venkovky' ? 'active' : ''}>
               <Link href="/rizeni-provozu-venkovky">Venkovky</Link>
             </li>
+            <li className={active === 'fronty' ? 'active' : ''}>
+              <Link href="/fronty">Fronty</Link>
+            </li>
           </ul>
         </div>
       ) : null}
