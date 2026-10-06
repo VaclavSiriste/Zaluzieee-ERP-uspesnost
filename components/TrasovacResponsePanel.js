@@ -38,7 +38,9 @@ export default function TrasovacResponsePanel({
   onToggle,
   onOpenMetric,
   brandLabel = 'zaluzieee - CZ',
-  organizationId = null
+  organizationId = null,
+  children = null,
+  timeBreakdown = null
 }) {
   if (!metrics) return null
 
@@ -95,6 +97,8 @@ export default function TrasovacResponsePanel({
           {expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}
         </span>
       </button>
+
+      {timeBreakdown}
 
       {expanded ? (
         <>
@@ -224,6 +228,7 @@ export default function TrasovacResponsePanel({
               ))}
             </div>
           ) : null}
+          {children}
         </>
       ) : null}
     </section>

@@ -1,4 +1,24 @@
-# Operator Metrics Dashboard - Nastavení
+# Operator Metrics Dashboard
+
+## 🧭 Stav vývoje (k 1. 10. 2026)
+
+### Hotovo (PR #1–#10)
+- **SLA – porovnání metod** – v rozbaleném Výčtu SLA na Řízení provozu (CZ). Stará metoda `first_iframe_change_at` vs. nová `first_contact_at` (zadání SLA reportingu). Kód: `lib/sla-compare.js`, `components/SlaComparePanel.js`, `/api/vycet-sla-porovnani`.
+  - V DB je zatím jen `first_contact_at` (plní se od 1. 10. 2026), `first_contact_type` a `first_response_minutes` chybí.
+  - Rozdíly 1. den: nová metoda nemá razítko u nedovolaných (počítá až dovolání) a u části kontaktovaných (nespárovaný hovor / zpožděný sync). Kde mají obě hodnotu, shodují se.
+- **Pracovní doba malujemeee** Po–Pá 8:00–16:30 (`weekday_8_1630` v `lib/working-hours-sql.js`).
+- **Dopadl hovor ANO / všechny poptávky** ve Výčtu SLA – ERP značky i OVT sheety.
+- **Fronty – nenavolané** (`/fronty`) – nevyřízené zmeškané hovory z Daktely po frontách a stáří (`lib/queue-backlog.js`).
+- **Časový rozpad SLA %** (hodiny dne / dny / měsíce roku) u SLA příchozí linky a Výčtu SLA (`lib/sla-time-breakdown.js`, `components/SlaTimeBreakdown.js`).
+
+### Čeká na informace
+- [ ] **Callback** – kdo má volat, kdo naplánoval zaměření (`kdo_naplanoval_zamereni`), preferované datum/čas (`preferovane_datum`, `preferovany_cas`). Upřesnit: kde zobrazit a podle čeho poznat, kdo má callback volat.
+- [ ] **Pokladamee a malujemeee z ERP** místo kontingenční tabulky front v Google Sheets – potřeba odkaz/screenshot kontingenčky.
+- [ ] **Svět stínu** – příchozí linka (počet hovorů, doba, hlavní metriky). Potřeba `organization_id` v ERP a ID front v Daktele.
+- [ ] **Časový rozpad** ještě u SLA trasovačů a u Výčtu SLA ze sheetů (sheet má jen datum, ne čas → jen dny/měsíce).
+- [ ] **Rozhodnutí k SLA metodě** – počítá se nedovolání jako reakce do SLA? Proč chybí `first_contact_type` a `first_response_minutes`?
+
+## ⚙️ Nastavení
 
 ## 🚀 Instalace
 

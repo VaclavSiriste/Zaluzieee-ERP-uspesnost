@@ -1,0 +1,337 @@
+import { useEffect, useState } from 'react'
+
+/** Kategorická paleta (pevné pořadí, nikdy necyklit) + šedá pro „Ostatní“. */
+const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7']
+const OTHER = '#b8bcc6'
+/** Barvy tří kategorií v souhrnném koláči. */
+const CATEGORY_COLORS = { blocked: '#4a3aa7', lost: '#eb6834', pending: '#2a78d6' }
+const MAX_SLICES = SERIES.length
+
+function pct(part, total) {
+  if (!total) return '—'
+  return `${((part / total) * 100).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} %`
+}
+
+/** Nejvýš 7 výsečí + „Ostatní“ — víc barev už oko nerozliší. */
+function toSlices(reasons) {
+  const top = reasons.slice(0, MAX_SLICES)
+  const rest = reasons.slice(MAX_SLICES)
+  const slices = top.map((reason, index) => ({ ...reason, color: SERIES[index] }))
+  const restCount = rest.reduce((sum, reason) => sum + reason.count, 0)
+  if (restCount) slices.push({ key: 'ostatni', label: `Ostatní (${rest.length})`, count: restCount, color: OTHER, folded: rest })
+  return slices
+}
+
+function arcPath(cx, cy, rOuter, rInner, a0, a1) {
+  // celý kruh → dvě poloviny (SVG arc neumí 360°)
+  if (a1 - a0 >= Math.PI * 2 - 1e-6) {
+    const mid = a0 + Math.PI
+    return `${arcPath(cx, cy, rOuter, rInner, a0, mid)} ${arcPath(cx, cy, rOuter, rInner, mid, a1)}`
+  }
+  const p = (r, a) => `${cx + r * Math.sin(a)},${cy - r * Math.cos(a)}`
+  const large = a1 - a0 > Math.PI ? 1 : 0
+  return `M${p(rOuter, a0)} A${rOuter},${rOuter} 0 ${large} 1 ${p(rOuter, a1)} L${p(rInner, a1)} A${rInner},${rInner} 0 ${large} 0 ${p(rInner, a0)} Z`
+}
+
+/**
+ * Výseč je „aktivní“, když je pod myší ona sama, její kategorie (souhrn: vnitřní kruh
+ * zvýrazní své důvody ve vnějším) nebo když je pod myší některý z jejích důvodů.
+ */
+function isActive(hover, item) {
+  if (!hover) return true
+  return (
+    hover.hoverKey === item.hoverKey ||
+    (item.group && hover.hoverKey === item.group) ||
+    (hover.group && hover.group === item.hoverKey)
+  )
+}
+
+function Ring({ items, total, rOuter, rInner, gap = 0.012, hover, onHover }) {
+  let angle = 0
+  return items.map((item) => {
+    const sweep = total ? (item.count / total) * Math.PI * 2 : 0
+    const a0 = angle + (items.length > 1 ? gap / 2 : 0)
+    const a1 = angle + sweep - (items.length > 1 ? gap / 2 : 0)
+    angle += sweep
+    if (a1 <= a0) return null
+    const active = isActive(hover, item)
+    const focus = { hoverKey: item.hoverKey, group: item.group, label: item.label, count: item.count }
+    return (
+      <path
+        key={item.hoverKey}
+        d={arcPath(100, 100, rOuter, rInner, a0, a1)}
+        fill={item.color}
+        opacity={active ? item.opacity ?? 1 : 0.18}
+        className={`lr-slice${hover && hover.hoverKey === item.hoverKey ? ' is-hover' : ''}`}
+        onMouseEnter={() => onHover(focus)}
+        onMouseLeave={() => onHover(null)}
+        onClick={() => onHover(hover && hover.hoverKey === item.hoverKey ? null : focus)}
+      >
+        <title>{`${item.label}: ${item.count} (${pct(item.count, total)})`}</title>
+      </path>
+    )
+  })
+}
+
+/** Popisek do středu koláče — dlouhé názvy zkrátit na dva řádky. */
+function splitLabel(label, max = 20) {
+  const words = String(label).split(' ')
+  const lines = ['']
+  for (const word of words) {
+    const current = lines[lines.length - 1]
+    if ((current + ' ' + word).trim().length > max && current) {
+      if (lines.length === 2) {
+        lines[1] = `${lines[1].slice(0, max - 1)}…`
+        break
+      }
+      lines.push(word)
+    } else {
+      lines[lines.length - 1] = `${current} ${word}`.trim()
+    }
+  }
+  return lines
+}
+
+function Donut({ children, total, caption, hover }) {
+  const lines = hover ? splitLabel(hover.label) : []
+  return (
+    <svg viewBox="0 0 200 200" className="lr-donut" role="img" aria-label={caption}>
+      {children}
+      {hover ? (
+        <g className="lr-center" pointerEvents="none">
+          <text x="100" y={lines.length > 1 ? 80 : 86} textAnchor="middle" className="lr-center-label">
+            {lines.map((line, i) => (
+              <tspan key={i} x="100" dy={i ? 12 : 0}>
+                {line}
+              </tspan>
+            ))}
+          </text>
+          <text x="100" y="112" textAnchor="middle" className="lr-donut-total">
+            {hover.count.toLocaleString('cs-CZ')}
+          </text>
+          <text x="100" y="128" textAnchor="middle" className="lr-donut-caption">
+            {pct(hover.count, total)}
+          </text>
+        </g>
+      ) : (
+        <g pointerEvents="none">
+          <text x="100" y="96" textAnchor="middle" className="lr-donut-total">
+            {total.toLocaleString('cs-CZ')}
+          </text>
+          <text x="100" y="116" textAnchor="middle" className="lr-donut-caption">
+            leadů
+          </text>
+        </g>
+      )}
+    </svg>
+  )
+}
+
+/** Legenda vždy vypíše všechny důvody — ty sloučené v grafu do „Ostatní“ mají šedou tečku. */
+function Legend({ reasons, total, hover, onHover }) {
+  return (
+    <ul className="lr-legend">
+      {reasons.map((reason, index) => {
+        const folded = index >= MAX_SLICES
+        const focus = { hoverKey: folded ? 'ostatni' : reason.key, label: reason.label, count: reason.count }
+        const isHover =
+          hover && (hover.label === reason.label || (folded && hover.hoverKey === 'ostatni' && hover.label.startsWith('Ostatní')))
+        return (
+          <li
+            key={reason.key + reason.label}
+            className={`lr-legend-item${isHover ? ' is-hover' : ''}${hover && !isHover ? ' is-dim' : ''}`}
+            onMouseEnter={() => onHover(focus)}
+            onMouseLeave={() => onHover(null)}
+          >
+            <span
+              className="lr-dot"
+              style={{ background: folded ? OTHER : SERIES[index] }}
+              aria-hidden="true"
+            />
+            <span className="lr-legend-label">{reason.label}</span>
+            <span className="lr-legend-count">{reason.count}</span>
+            <span className="lr-legend-pct">{pct(reason.count, total)}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function CategoryPie({ index, category }) {
+  const [hover, setHover] = useState(null)
+  const slices = toSlices(category.reasons).map((slice) => ({ ...slice, hoverKey: slice.key }))
+  return (
+    <article className="lr-card">
+      <header className="lr-card-head">
+        <span className="lr-card-num">{index}</span>
+        <div>
+          <h3 className="lr-card-title">{category.label}</h3>
+          <p className="lr-card-hint">{category.hint}</p>
+        </div>
+      </header>
+      {category.total ? (
+        <div className="lr-card-body">
+          <Donut total={category.total} caption={category.label} hover={hover}>
+            <Ring items={slices} total={category.total} rOuter={92} rInner={58} hover={hover} onHover={setHover} />
+          </Donut>
+          <Legend reasons={category.reasons} total={category.total} hover={hover} onHover={setHover} />
+        </div>
+      ) : (
+        <p className="lr-empty">V období žádné leady v této kategorii.</p>
+      )}
+    </article>
+  )
+}
+
+/** Odstíny jedné barvy pro důvody uvnitř kategorie (sytá → světlejší). */
+const SHADES = [1, 0.78, 0.6, 0.45, 0.34]
+
+function SummaryPie({ data }) {
+  const [hover, setHover] = useState(null)
+  // jeden kruh: všechny důvody, seřazené po kategoriích, barva = kategorie, odstín = pořadí
+  const groups = data.categories.map((category) => ({
+    ...category,
+    color: CATEGORY_COLORS[category.key],
+    reasons: category.reasons.map((reason, i) => ({
+      ...reason,
+      hoverKey: `${category.key}-${reason.key}`,
+      group: category.key,
+      color: CATEGORY_COLORS[category.key],
+      opacity: SHADES[Math.min(i, SHADES.length - 1)]
+    }))
+  }))
+  const slices = groups.flatMap((group) => group.reasons)
+
+  return (
+    <article className="lr-card lr-card-summary">
+      <header className="lr-card-head">
+        <span className="lr-card-num">4</span>
+        <div>
+          <h3 className="lr-card-title">Souhrn – všechny důvody v jednom</h3>
+          <p className="lr-card-hint">
+            Každá výseč je jeden důvod, barva = kategorie. Procenta jsou ze všech {data.total.toLocaleString('cs-CZ')}{' '}
+            leadů. Najeďte myší na výseč, kategorii nebo důvod v legendě.
+          </p>
+        </div>
+      </header>
+      <div className="lr-card-body">
+        <Donut total={data.total} caption="Souhrn všech důvodů" hover={hover}>
+          <Ring items={slices} total={data.total} rOuter={96} rInner={58} gap={0.008} hover={hover} onHover={setHover} />
+        </Donut>
+        <div className="lr-summary-legend">
+          {groups.map((group) => {
+            const groupFocus = { hoverKey: group.key, label: group.label, count: group.total }
+            const groupHover = hover && (hover.hoverKey === group.key || hover.group === group.key)
+            return (
+              <div key={group.key} className={`lr-summary-group${hover && !groupHover ? ' is-dim' : ''}`}>
+                <div
+                  className={`lr-summary-head${hover && hover.hoverKey === group.key ? ' is-hover' : ''}`}
+                  onMouseEnter={() => setHover(groupFocus)}
+                  onMouseLeave={() => setHover(null)}
+                >
+                  <span className="lr-dot" style={{ background: group.color }} aria-hidden="true" />
+                  <strong>{group.label}</strong>
+                  <span className="lr-legend-count">{group.total}</span>
+                  <span className="lr-legend-pct">{pct(group.total, data.total)}</span>
+                </div>
+                <ul className="lr-legend">
+                  {group.reasons.map((reason) => {
+                    const isHover = hover && hover.hoverKey === reason.hoverKey
+                    return (
+                      <li
+                        key={reason.hoverKey}
+                        className={`lr-legend-item${isHover ? ' is-hover' : ''}`}
+                        onMouseEnter={() =>
+                          setHover({ hoverKey: reason.hoverKey, group: group.key, label: reason.label, count: reason.count })
+                        }
+                        onMouseLeave={() => setHover(null)}
+                      >
+                        <span className="lr-dot" style={{ background: group.color, opacity: reason.opacity }} aria-hidden="true" />
+                        <span className="lr-legend-label">{reason.label}</span>
+                        <span className="lr-legend-count">{reason.count}</span>
+                        <span className="lr-legend-pct">{pct(reason.count, data.total)}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+/** Koláče leadů podle důvodu ne hovoru — 3 kategorie + souhrn. Data si načítá sám. */
+export default function LeadReasonPies({ brandId, brandLabel, period, startDate = '', endDate = '' }) {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError('')
+      try {
+        const params = new URLSearchParams({
+          brand: brandId,
+          period,
+          ...(startDate ? { startDate } : {}),
+          ...(endDate ? { endDate } : {})
+        })
+        const response = await fetch(`/api/lead-reasons?${params}`)
+        const json = await response.json()
+        if (!response.ok || json.error) throw new Error(json.error || `HTTP ${response.status}`)
+        if (!cancelled) setData(json)
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || 'Nepodařilo se načíst důvody leadů')
+          setData(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [brandId, period, startDate, endDate])
+
+  return (
+    <section className="sla-block sla-block-nested">
+      <h2 className="sla-block-title">Leady podle důvodu – co nedopadlo a proč</h2>
+      <p className="sla-block-desc">
+        {brandLabel}. Leady dle data vzniku v období, rozdělené podle „Důvodu ne hovoru“. U každého
+        koláče je vidět poměr jednotlivých problémů, čtvrtý ukazuje poměr mezi kategoriemi.
+        {data && data.source !== 'erp-db' ? ' Zdroj: OVT sheet (sloupec M), „v řešení“ ze sheetu nepoznáme.' : ''}
+      </p>
+
+      {loading && !data ? <div className="sla-loading">Načítám důvody leadů…</div> : null}
+      {error ? <p className="danger">Důvody leadů: {error}</p> : null}
+
+      {data && data.total === 0 ? (
+        <p className="lr-empty">V období nemá žádný lead vyplněný důvod ne hovoru.</p>
+      ) : null}
+
+      {data && data.total > 0 ? (
+        <div className="lr-grid">
+          {data.categories.map((category, i) => (
+            <CategoryPie key={category.key} index={i + 1} category={category} />
+          ))}
+          <SummaryPie data={data} />
+        </div>
+      ) : null}
+
+      {data && data.unassigned.length ? (
+        <p className="drilldown-muted">
+          Nezařazené důvody (nepočítají se):{' '}
+          {data.unassigned.map((u) => `${u.key} ${u.count}`).join(', ')}
+        </p>
+      ) : null}
+    </section>
+  )
+}

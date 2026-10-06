@@ -5030,3 +5030,652 @@ h6 {
     overflow-x: auto;
   }
 }
+
+/* ---- Časový rozpad SLA ---- */
+.sla-time {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.sla-time-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sla-time-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e2a52;
+}
+
+.sla-time-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sla-time-tabs {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: #eef0ff;
+}
+
+.sla-time-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #475569;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sla-time-tab.is-active {
+  background: #fff;
+  color: #1e2a52;
+  box-shadow: 0 1px 3px rgba(30, 42, 82, 0.12);
+}
+
+.sla-time-chart {
+  position: relative;
+}
+
+.sla-time-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sla-time-grid {
+  stroke: #e2e8f0;
+  stroke-width: 1;
+}
+
+.sla-time-axis {
+  fill: #64748b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-time-bar {
+  fill: #4f46e5;
+}
+
+.sla-time-bar.is-low {
+  fill: #c7d2fe;
+}
+
+.sla-time-bar.is-hover {
+  fill: #3730a3;
+}
+
+.sla-time-bar.is-low.is-hover {
+  fill: #a5b4fc;
+}
+
+.sla-time-tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #1e2a52;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(30, 42, 82, 0.25);
+}
+
+/* ---- Leady podle důvodu – koláče ---- */
+.lr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.lr-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.lr-card-summary {
+  grid-column: 1 / -1;
+  background: #f8f9ff;
+}
+
+.lr-card-summary .lr-card-body {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+
+.lr-card-summary .lr-donut {
+  width: 200px;
+  height: 200px;
+}
+
+.lr-card-summary .lr-legend {
+  gap: 12px;
+}
+
+.lr-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.lr-card-num {
+  flex: 0 0 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #eef0ff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.lr-card-title {
+  margin: 0;
+  font-size: 15px;
+  color: #1e2a52;
+}
+
+.lr-card-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.lr-card-body {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.lr-donut {
+  width: 170px;
+  height: 170px;
+}
+
+.lr-donut path {
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.lr-donut-total {
+  font-size: 26px;
+  font-weight: 760;
+  fill: #1e2a52;
+}
+
+.lr-donut-caption {
+  font-size: 12px;
+  fill: #64748b;
+}
+
+.lr-legend {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lr-legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 52px;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #1e2a52;
+}
+
+.lr-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.lr-legend-label {
+  min-width: 0;
+}
+
+.lr-legend-sub {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.lr-legend-group {
+  align-items: start !important;
+}
+
+.lr-legend-group .lr-dot {
+  margin-top: 4px;
+}
+
+.lr-legend-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lr-legend-pct {
+  text-align: right;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.lr-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+@media (max-width: 1100px) {
+  .lr-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .lr-card-body {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+/* ---- Konverze po krajích ---- */
+.rf-table td {
+  white-space: nowrap;
+}
+
+.rf-table tr.is-service .rf-name {
+  font-weight: 700;
+}
+
+.rf-table tr.is-service .rf-name::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #2a78d6;
+  vertical-align: middle;
+}
+
+.rf-total td {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+.rf-leads,
+.rf-rate {
+  text-align: right;
+}
+
+.rf-stage {
+  min-width: 130px;
+}
+
+.rf-stage-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rf-stage-count {
+  font-weight: 650;
+}
+
+.rf-stage-rate {
+  color: #64748b;
+}
+
+.rf-track {
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: #eef0ff;
+  overflow: hidden;
+}
+
+.rf-bar {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.rf-bar-call { background: #86b6ef; }
+.rf-bar-meet { background: #2a78d6; }
+.rf-bar-win { background: #1baf7a; }
+
+/* Široké tabulky se posouvají uvnitř bloku, nerozšiřují stránku */
+.sla-page .dashboard-main > *,
+.sla-block > * {
+  min-width: 0;
+}
+
+.rf-stage {
+  min-width: 104px;
+}
+
+.sla-block {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rf-table th {
+  white-space: normal;
+  vertical-align: bottom;
+}
+
+/* Hover na koláčích */
+.lr-slice {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.lr-slice.is-hover {
+  stroke: #1e2a52;
+  stroke-width: 1.5;
+}
+
+.lr-center-label {
+  font-size: 10px;
+  font-weight: 650;
+  fill: #475569;
+}
+
+.lr-legend-item {
+  padding: 2px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.lr-legend-item.is-hover {
+  background: #eef0ff;
+}
+
+.lr-legend-item.is-dim {
+  opacity: 0.45;
+}
+
+/* Souhrnný koláč – legenda po kategoriích */
+.lr-summary-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.lr-summary-group {
+  display: grid;
+  gap: 6px;
+  transition: opacity 0.15s ease;
+}
+
+.lr-summary-group.is-dim {
+  opacity: 0.45;
+}
+
+.lr-summary-head {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 52px;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1e2a52;
+  border-bottom: 1px solid #e3e7ff;
+}
+
+.lr-summary-head.is-hover {
+  background: #eef0ff;
+}
+
+@media (max-width: 1100px) {
+  .lr-summary-legend {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rf-th-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #64748b;
+}
+
+/* SLA 30 s – důvody nesplnění */
+.s30 {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e3e7ff;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.s30-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e2a52;
+}
+
+.s30-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.s30-row {
+  cursor: pointer;
+}
+
+.s30-row.is-open td {
+  background: #eef0ff;
+}
+
+.s30-caret {
+  display: inline-block;
+  width: 12px;
+  color: #4f46e5;
+}
+
+.s30-hint {
+  display: block;
+  margin-left: 16px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.s30-items td {
+  background: #f8f9ff;
+  padding: 8px 12px 12px;
+}
+
+.s30-items-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.s30-items-table th,
+.s30-items-table td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid #eef0ff;
+  background: transparent;
+}
+
+.s30-items-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* Časový rozpad – skládané počty */
+.sla-time-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: #1e2a52;
+}
+
+.sla-time-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.sla-time-chart.is-loading svg {
+  opacity: 0.3;
+  transition: opacity 0.15s ease;
+}
+
+.sla-time-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e2a52;
+}
+
+.sla-time-chart {
+  min-height: 120px;
+}
+
+.sla-time-chart g.is-hover rect:not([fill='transparent']) {
+  filter: brightness(0.88);
+}
+
+.sla-time-pct {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #1e2a52;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-time-pct.is-low {
+  fill: #94a3b8;
+}
+
+.sla-time-tip .sla-time-swatch {
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+}
+
+.rf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---- Fronty – nenavolané leady ---- */
+.fronty-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fronty-tab {
+  appearance: none;
+  border: 1px solid #d8deff;
+  background: #fff;
+  color: #1e2a52;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fronty-tab:hover {
+  border-color: #7c83ff;
+}
+
+.fronty-tab.is-active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.fronty-table-wrap {
+  overflow-x: auto;
+}
+
+.fronty-cell {
+  text-align: center;
+  min-width: 48px;
+}
+
+.fronty-table th,
+.fronty-table td {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.fronty-total td {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+.fronty-table-wrap td {
+  white-space: nowrap;
+}
+
+.fronty-table-wrap td {
+  white-space: nowrap;
+}
+
+/* Mřížky s tabulkami nesmí přetéct kartu – tabulka se posouvá uvnitř */
+.sla-cmp {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sla-cmp > *,
+.sla-breakdown-stack > * {
+  min-width: 0;
+}

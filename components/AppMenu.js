@@ -69,6 +69,9 @@ export default function AppMenu({ active = 'dashboard' }) {
             <li className={active === 'sla' ? 'active' : ''}>
               <Link href="/vycet-sla">Výčet SLA</Link>
             </li>
+            <li className={active === 'fronty' ? 'active' : ''}>
+              <Link href="/fronty">Fronty – nenavolané</Link>
+            </li>
             <li className={active === 'targets' ? 'active' : ''}>
               <Link href="/targety">Targety</Link>
             </li>
@@ -94,6 +97,9 @@ export default function AppMenu({ active = 'dashboard' }) {
             </li>
             <li className={active === 'operations-venkovky' ? 'active' : ''}>
               <Link href="/rizeni-provozu-venkovky">Venkovky</Link>
+            </li>
+            <li className={active === 'fronty' ? 'active' : ''}>
+              <Link href="/fronty">Fronty</Link>
             </li>
           </ul>
         </div>
