@@ -53,9 +53,35 @@ function Row({ region, isTotal = false, venkovky }) {
  * Konverze po krajích (ERP značky): leady → dopadl hovor → zaměření → zakázka.
  * Kohorta = leady vzniklé ve zvoleném období.
  */
+function ErpRow({ region, isTotal = false }) {
+  return (
+    <tr className={`${region.service ? 'is-service' : ''}${isTotal ? ' rf-total' : ''}`}>
+      <td className="rf-name">{region.name}</td>
+      <td className="rf-leads">{num(region.leads)}</td>
+      <td className="rf-leads">{num(region.pz)}</td>
+      <td className="rf-stage">
+        <div className="rf-stage-top">
+          <span className="rf-stage-count">{pct(region.conv_pct)}</span>
+        </div>
+        <div className="rf-track">
+          {region.conv_pct != null ? (
+            <div className="rf-bar rf-bar-meet" style={{ width: `${Math.min(region.conv_pct, 100)}%` }} />
+          ) : null}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+const METHODS = [
+  { key: 'erp', label: 'Metodika ERP' },
+  { key: 'cohort', label: 'Kohorta leadů' }
+]
+
 export default function RegionFunnelPanel({ brandId, brandLabel, period, startDate = '', endDate = '' }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [method, setMethod] = useState('erp')
   const venkovky = brandId === 'venkovky'
 
   useEffect(() => {
@@ -65,6 +91,7 @@ export default function RegionFunnelPanel({ brandId, brandLabel, period, startDa
       try {
         const params = new URLSearchParams({
           brand: brandId,
+          method,
           period,
           ...(startDate ? { startDate } : {}),
           ...(endDate ? { endDate } : {})
@@ -81,11 +108,37 @@ export default function RegionFunnelPanel({ brandId, brandLabel, period, startDa
     return () => {
       cancelled = true
     }
-  }, [brandId, period, startDate, endDate])
+  }, [brandId, method, period, startDate, endDate])
 
   return (
     <section className="sla-block sla-block-nested">
-      <h2 className="sla-block-title">Konverze po krajích</h2>
+      <div className="rf-head">
+        <h2 className="sla-block-title">Konverze po krajích</h2>
+        <div className="sla-time-tabs" role="tablist" aria-label="Metodika">
+          {METHODS.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              role="tab"
+              aria-selected={method === m.key}
+              className={`sla-time-tab${method === m.key ? ' is-active' : ''}`}
+              onClick={() => setMethod(m.key)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {method === 'erp' ? (
+        <p className="sla-block-desc">
+          {brandLabel}. <strong>Stejný výpočet jako ERP Nástěnka → Metriky.</strong> Leady = datum
+          přijetí leadu v období, jeden zákazník = jeden lead. Naplánované zaměřovačky PZ = Dopadl hovor
+          ANO s datem navolání v období a vyplněným datem zaměření. Konverze = PZ / leady.
+          {venkovky ? ' Venkovky nevyplňují Dopadl hovor, PZ proto vychází 0.' : ''}
+          {brandId === 'sk' ? ' Zvýrazněné jsou kraje, kam jezdíme.' : ''}
+        </p>
+      ) : null}
+      {method === 'cohort' ? (
       <p className="sla-block-desc">
         {brandLabel}. Leady vzniklé v období a kam se dostaly: dopadl hovor → zaměření → zakázka
         (dopadlo zaměření ANO). Procenta jsou z leadů daného kraje. Čerstvé leady ještě nestihly
@@ -103,8 +156,38 @@ export default function RegionFunnelPanel({ brandId, brandLabel, period, startDa
         {venkovky ? ' Venkovky nevyplňují ANO/NE sloupce — zaměření a zakázka jsou odvozené z jejich stavů.' : ''}
         {brandId === 'sk' ? ' Zvýrazněné jsou kraje, kam jezdíme.' : ''}
       </p>
+      ) : null}
       {error ? <p className="danger">{error}</p> : null}
-      {data ? (
+      {data && data.method === 'erp' && method === 'erp' ? (
+        <div className="fronty-table-wrap">
+          <table className="sla-cmp-table rf-table">
+            <thead>
+              <tr>
+                <th>Kraj</th>
+                <th>
+                  Leady
+                  <span className="rf-th-sub">datum přijetí, dle zákazníka</span>
+                </th>
+                <th>
+                  Naplánované zaměřovačky PZ
+                  <span className="rf-th-sub">dopadl ANO + datum zaměření</span>
+                </th>
+                <th>
+                  Konverze lead → zaměřovačka
+                  <span className="rf-th-sub">PZ / leady</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.regions.map((region) => (
+                <ErpRow key={region.id} region={region} />
+              ))}
+              <ErpRow region={data.totals} isTotal />
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {data && data.method === 'cohort' && method === 'cohort' ? (
         <div className="fronty-table-wrap">
           <table className="sla-cmp-table rf-table">
             <thead>

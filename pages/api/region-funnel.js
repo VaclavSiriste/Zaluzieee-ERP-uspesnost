@@ -7,6 +7,7 @@ import { formatDateOnly, resolveDateRange } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
 import { resolveOvtSheetBrand } from '@/lib/ovt-sheet'
 import { fetchRegionFunnel } from '@/lib/region-funnel'
+import { fetchRegionFunnelErp } from '@/lib/region-funnel-erp'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -24,7 +25,9 @@ export default async function handler(req, res) {
       startDate: typeof req.query.startDate === 'string' ? req.query.startDate : '',
       endDate: typeof req.query.endDate === 'string' ? req.query.endDate : ''
     })
-    const data = await fetchRegionFunnel({
+    const method = req.query.method === 'erp' ? 'erp' : 'cohort'
+    const fetcher = method === 'erp' ? fetchRegionFunnelErp : fetchRegionFunnel
+    const data = await fetcher({
       brandId,
       organizationId: resolveOrganizationId({ brandId }),
       start,
@@ -34,6 +37,7 @@ export default async function handler(req, res) {
       brand: brandId,
       startDate: formatDateOnly(start),
       endDate: formatDateOnly(end),
+      method,
       ...data
     })
   } catch (error) {
