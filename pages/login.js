@@ -96,7 +96,7 @@ export default function LoginPage() {
               autoComplete="email"
               required
             />
-            <p className="login-hint">Povolené domény: @zaluzieee.cz a @demaxia.cz</p>
+            <p className="login-hint">Povolené domény: @zaluzieee.cz, @demaxia.cz a @3eee.cz</p>
 
             {error ? <p className="login-error">{error}</p> : null}
 

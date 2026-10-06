@@ -38,7 +38,7 @@ function parsePayload(encodedPayload) {
 function isAllowedEmail(email) {
   return (
     typeof email === 'string' &&
-    /^[^\s@]+@(zaluzieee\.cz|demaxia\.cz)$/.test(email.trim().toLowerCase())
+    /^[^\s@]+@(zaluzieee\.cz|demaxia\.cz|3eee\.cz)$/.test(email.trim().toLowerCase())
   )
 }
 
