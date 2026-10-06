@@ -96,7 +96,7 @@ export default function FrontyPage() {
         <div className="dashboard-main">
           <header className="sla-hero">
             <div className="sla-hero-copy">
-              <p className="sla-kicker">Operátoři · Daktela</p>
+              <p className="sla-kicker">Provoz · fronty Daktela všech značek</p>
               <h1>Fronty – nenavolané leady</h1>
               <p className="sla-hero-lead">
                 Kolik lidí nám volalo, nedovolali se a ještě jsme se jim neozvali — a jak dlouho už
