@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import usePersistedDateFilter from '@/hooks/usePersistedDateFilter'
 import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
 import DrilldownCount from '@/components/DrilldownCount'
@@ -120,9 +121,8 @@ function formatSyncTimestamp(value) {
 
 export default function OperatorPausesPage() {
   const initialMonthRange = getMonthToDateRange()
-  const [period, setPeriod] = useState('month')
-  const [startDate, setStartDate] = useState(initialMonthRange.startDate)
-  const [endDate, setEndDate] = useState(initialMonthRange.endDate)
+  const { period, setPeriod, startDate, setStartDate, endDate, setEndDate } =
+    usePersistedDateFilter({ period: 'month', startDate: initialMonthRange.startDate, endDate: initialMonthRange.endDate })
   const [bubbles, setBubbles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import usePersistedDateFilter from '@/hooks/usePersistedDateFilter'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AppMenu from '@/components/AppMenu'
@@ -11,10 +12,9 @@ import { useMetricDrilldown, DRILL } from '@/hooks/useMetricDrilldown'
 
 export default function OperatorsPage() {
   const router = useRouter()
-  const [period, setPeriod] = useState('month')
+  const { period, setPeriod, startDate, setStartDate, endDate, setEndDate } =
+    usePersistedDateFilter({ period: 'month' })
   const [dateBasis, setDateBasis] = useState('navolani')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
   const [bubbles, setBubbles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import usePersistedDateFilter from '@/hooks/usePersistedDateFilter'
 import AppMenu from '@/components/AppMenu'
 import CallSuccessNavolaniPanel from '@/components/CallSuccessNavolaniPanel'
 import CallSuccessTrasovaniPanel from '@/components/CallSuccessTrasovaniPanel'
@@ -145,9 +146,9 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
   const vycetSlaConfigured =
     brand.organizationId != null || brand.navolaniSource === 'ovt-sheet' || brand.vycetSlaSource === 'ovt-sheet'
 
-  const [period, setPeriod] = useState('month')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const { period, setPeriod, startDate, setStartDate, endDate, setEndDate } =
+
+    usePersistedDateFilter({ period: 'month' })
   const [metrics, setMetrics] = useState(null)
   const [slaFilterRange, setSlaFilterRange] = useState(null)
   const [navolaniMetrics, setNavolaniMetrics] = useState(null)
@@ -1092,6 +1093,9 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               sheetTechnicians={brand.navolaniSource === 'ovt-sheet' ? sheetTechnicians : null}
               completedSource={brand.navolaniSource === 'ovt-sheet' ? 'ovt-sheet' : 'erp'}
               enableCzSkSwitch={brand.id === 'cz' || brand.id === 'sk'}
+              period={period}
+              startDate={startDate}
+              endDate={endDate}
             />
           ) : null}
         </div>

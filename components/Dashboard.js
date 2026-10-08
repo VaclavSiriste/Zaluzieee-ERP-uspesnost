@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import usePersistedDateFilter from '@/hooks/usePersistedDateFilter'
 import MetricsCard from '@/components/MetricsCard'
 import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
@@ -8,13 +9,11 @@ import DrilldownMoney from '@/components/DrilldownMoney'
 import { useMetricDrilldown, DRILL } from '@/hooks/useMetricDrilldown'
 
 export default function Dashboard() {
-  const [period, setPeriod] = useState('month')
+  const { period, setPeriod, startDate, setStartDate, endDate, setEndDate } =
+    usePersistedDateFilter({ period: 'month' })
   const [dateBasis, setDateBasis] = useState('navolani')
-  const [filters, setFilters] = useState({
-    region: '',
-    startDate: '',
-    endDate: ''
-  })
+  const [region, setRegion] = useState('')
+  const filters = useMemo(() => ({ region, startDate, endDate }), [region, startDate, endDate])
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -125,10 +124,10 @@ export default function Dashboard() {
             onDateBasisChange={setDateBasis}
             startDate={filters.startDate}
             endDate={filters.endDate}
-            onStartDateChange={(value) => setFilters((current) => ({ ...current, startDate: value }))}
-            onEndDateChange={(value) => setFilters((current) => ({ ...current, endDate: value }))}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
             region={filters.region}
-            onRegionChange={(value) => setFilters((current) => ({ ...current, region: value }))}
+            onRegionChange={setRegion}
             regions={Object.keys(data.byRegion || {})}
           />
 

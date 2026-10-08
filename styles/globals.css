@@ -5614,6 +5614,14 @@ h6 {
 }
 
 /* ---- Fronty – nenavolané leady ---- */
+.fronty-section + .fronty-section {
+  margin-top: 32px;
+}
+
+.ops-targets-history {
+  margin-top: 12px;
+}
+
 .fronty-tabs {
   display: flex;
   flex-wrap: wrap;
