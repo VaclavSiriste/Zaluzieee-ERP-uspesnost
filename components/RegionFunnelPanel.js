@@ -131,9 +131,10 @@ export default function RegionFunnelPanel({ brandId, brandLabel, period, startDa
       </div>
       {method === 'erp' ? (
         <p className="sla-block-desc">
-          {brandLabel}. <strong>Stejný výpočet jako ERP Nástěnka → Metriky.</strong> Leady = datum
-          přijetí leadu v období, jeden zákazník = jeden lead. Naplánované zaměřovačky PZ = Dopadl hovor
-          ANO s datem navolání v období a vyplněným datem zaměření. Konverze = PZ / leady.
+          {brandLabel}. Leady = objednávky vytvořené v systému v období (datum se zapíše
+          automaticky a nedá se přepsat), každá objednávka zvlášť, bez duplikací. Naplánované
+          zaměřovačky PZ = Dopadl hovor ANO s datem navolání v období a vyplněným datem zaměření,
+          bez duplikací. Konverze = PZ / leady.
           {venkovky ? ' Venkovky nevyplňují Dopadl hovor, PZ proto vychází 0.' : ''}
           {brandId === 'sk' ? ' Zvýrazněné jsou kraje, kam jezdíme.' : ''}
         </p>
@@ -166,7 +167,7 @@ export default function RegionFunnelPanel({ brandId, brandLabel, period, startDa
                 <th>Kraj</th>
                 <th>
                   Leady
-                  <span className="rf-th-sub">datum přijetí, dle zákazníka</span>
+                  <span className="rf-th-sub">datum vytvoření, bez duplikací</span>
                 </th>
                 <th>
                   Naplánované zaměřovačky PZ
