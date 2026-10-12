@@ -1,16 +1,49 @@
 /**
  * Splněno targetů z ERP podle data zaměření
  * GET /api/targets-completed?month=2026-01
+ * GET /api/targets-completed?fromMonth=2026-01&toMonth=2026-09  → zpětný přehled po měsících
  */
 
-import { fetchTargetsCompletedFromErp } from '@/lib/targets-completed-erp'
+import {
+  fetchTargetsCompletedByMonthFromErp,
+  fetchTargetsCompletedFromErp
+} from '@/lib/targets-completed-erp'
 import { getErpPool } from '@/lib/db-esm'
 import { resolveOrganizationId } from '@/lib/operations-brands'
-import { monthKeyToDateRange, resolveRegionCatalogForBrand } from '@/lib/targets-storage'
+import {
+  listMonthKeysInRange,
+  monthKeyToDateRange,
+  resolveRegionCatalogForBrand
+} from '@/lib/targets-storage'
+
+/** Panel targetů se načítá na každé stránce Řízení provozu (CZ i SK) — krátká cache šetří ERP. */
+const CACHE_TTL_MS = 5 * 60 * 1000
+const cache = new Map()
+
+async function cached(key, load) {
+  const hit = cache.get(key)
+  if (hit && hit.expires > Date.now()) return hit.promise
+  const promise = load()
+  cache.set(key, { promise, expires: Date.now() + CACHE_TTL_MS })
+  promise.catch(() => cache.delete(key))
+  return promise
+}
 
 function parseMonthKey(value) {
   const key = String(value || '').trim()
   return /^\d{4}-\d{2}$/.test(key) ? key : null
+}
+
+function toDateRange(fromKey, toKey) {
+  const start = new Date(monthKeyToDateRange(fromKey).startDate)
+  const { endDate } = monthKeyToDateRange(toKey)
+  const end = new Date(endDate)
+  end.setHours(23, 59, 59, 999)
+  return { start, end, startDate: monthKeyToDateRange(fromKey).startDate, endDate }
+}
+
+function sumValues(map) {
+  return Object.values(map).reduce((sum, n) => sum + Number(n || 0), 0)
 }
 
 export default async function handler(req, res) {
@@ -19,8 +52,12 @@ export default async function handler(req, res) {
   }
 
   const monthKey = parseMonthKey(req.query.month)
-  if (!monthKey) {
-    return res.status(400).json({ error: 'Chybí nebo neplatný parametr month (YYYY-MM)' })
+  const fromMonth = parseMonthKey(req.query.fromMonth)
+  const toMonth = parseMonthKey(req.query.toMonth)
+  if (!monthKey && !(fromMonth && toMonth)) {
+    return res
+      .status(400)
+      .json({ error: 'Chybí nebo neplatný parametr month (YYYY-MM), případně fromMonth + toMonth' })
   }
 
   const brandId = typeof req.query.brand === 'string' ? req.query.brand : 'cz'
@@ -38,28 +75,57 @@ export default async function handler(req, res) {
     })
   }
 
+  const regionCatalog = resolveRegionCatalogForBrand(brandId)
+
   try {
-    const { startDate, endDate } = monthKeyToDateRange(monthKey)
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    end.setHours(23, 59, 59, 999)
+    if (!monthKey) {
+      const monthKeys = listMonthKeysInRange(fromMonth, toMonth)
+      const range = toDateRange(monthKeys[0], monthKeys[monthKeys.length - 1])
+      const result = await cached(`range|${brandId}|${organizationId}|${range.startDate}|${range.endDate}`, () =>
+        fetchTargetsCompletedByMonthFromErp({
+          start: range.start,
+          end: range.end,
+          regionCatalog,
+          organizationId,
+          brandId
+        })
+      )
+      const months = monthKeys.map((key) => {
+        const month = result.months[key]
+        return {
+          month: key,
+          total: month?.total || 0,
+          technicians: month?.technicians || {},
+          regions: month?.regions || {}
+        }
+      })
+      return res.status(200).json({
+        brand: brandId,
+        organization_id: organizationId,
+        start: range.startDate,
+        end: range.endDate,
+        source: result.source,
+        months
+      })
+    }
 
-    const regionCatalog = resolveRegionCatalogForBrand(brandId)
-
-    const completed = await fetchTargetsCompletedFromErp({
-      start,
-      end,
-      regionCatalog,
-      organizationId,
-      brandId
-    })
+    const range = toDateRange(monthKey, monthKey)
+    const completed = await cached(`month|${brandId}|${organizationId}|${monthKey}`, () =>
+      fetchTargetsCompletedFromErp({
+        start: range.start,
+        end: range.end,
+        regionCatalog,
+        organizationId,
+        brandId
+      })
+    )
 
     return res.status(200).json({
       month: monthKey,
       brand: brandId,
       organization_id: organizationId,
-      start: startDate,
-      end: endDate,
+      start: range.startDate,
+      end: range.endDate,
       source: completed.source,
       completed: {
         total: completed.total,
@@ -72,8 +138,8 @@ export default async function handler(req, res) {
       },
       totals: {
         all: completed.total,
-        technicians: Object.values(completed.technicians).reduce((sum, n) => sum + Number(n || 0), 0),
-        regions: Object.values(completed.regions).reduce((sum, n) => sum + Number(n || 0), 0)
+        technicians: sumValues(completed.technicians),
+        regions: sumValues(completed.regions)
       }
     })
   } catch (error) {

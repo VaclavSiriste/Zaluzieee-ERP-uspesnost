@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import usePersistedDateFilter from '@/hooks/usePersistedDateFilter'
 import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
 import OperatorDirectory from '@/components/OperatorDirectory'
@@ -46,9 +47,8 @@ function formatDateTime(value) {
 
 export default function DochazkaPage() {
   const initial = getMonthToDateRange()
-  const [period, setPeriod] = useState('month')
-  const [startDate, setStartDate] = useState(initial.startDate)
-  const [endDate, setEndDate] = useState(initial.endDate)
+  const { period, setPeriod, startDate, setStartDate, endDate, setEndDate } =
+    usePersistedDateFilter({ period: 'month', startDate: initial.startDate, endDate: initial.endDate })
   const [items, setItems] = useState([])
   const [drafts, setDrafts] = useState({})
   const [loading, setLoading] = useState(true)

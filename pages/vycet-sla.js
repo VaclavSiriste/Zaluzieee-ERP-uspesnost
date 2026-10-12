@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import usePersistedDateFilter from '@/hooks/usePersistedDateFilter'
 import AppMenu from '@/components/AppMenu'
 import FilterAssistant from '@/components/FilterAssistant'
 import DrilldownCount from '@/components/DrilldownCount'
@@ -12,9 +13,8 @@ function formatPercent(value) {
 }
 
 export default function VycetSlaPage() {
-  const [period, setPeriod] = useState('month')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const { period, setPeriod, startDate, setStartDate, endDate, setEndDate } =
+    usePersistedDateFilter({ period: 'month' })
   const [metrics, setMetrics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

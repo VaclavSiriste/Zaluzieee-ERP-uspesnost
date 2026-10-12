@@ -1,9 +1,12 @@
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import TargetBarInput from '@/components/TargetBarInput'
 import { sortRegions } from '@/lib/czech-regions'
+import { resolveDateRange } from '@/lib/metrics-query'
 import {
   formatMonthLabel,
+  getCurrentMonthKey,
+  listMonthKeysInRange,
   listMonthOptions,
   parseTargetNumber,
   readMonthBucket,
@@ -18,6 +21,8 @@ import {
 import { syncTargetsCompletedFromErp, syncTargetsCompletedFromOvtSheet } from '@/lib/sync-targets-completed'
 import { sortTechnicians, technicianId } from '@/lib/technician-targets'
 import MetricInfoTip, { MetricLabel } from '@/components/MetricInfoTip'
+
+const SYNC_FRESH_MS = 5 * 60 * 1000
 
 function formatNumber(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
@@ -69,6 +74,95 @@ function summarizeBucket(bucket) {
     completed: parseTargetNumber(completedRaw),
     pct: computeProgressPct(targetRaw, completedRaw)
   }
+}
+
+/**
+ * Zpětný přehled targetů po měsících filtru. Cíl = uložený měsíční cíl (Targety),
+ * splněno = ERP jedním dotazem za celý rozsah (OVT sheet značky: uložené splněno).
+ */
+function TargetsHistory({ brandId, label, monthKeys, fromOvtSheet }) {
+  const [erpTotals, setErpTotals] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const fromKey = monthKeys[0]
+  const toKey = monthKeys[monthKeys.length - 1]
+
+  useEffect(() => {
+    if (fromOvtSheet) {
+      setErpTotals(null)
+      return undefined
+    }
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError('')
+      try {
+        const params = new URLSearchParams({ fromMonth: fromKey, toMonth: toKey, brand: brandId })
+        const response = await fetch(`/api/targets-completed?${params}`)
+        const json = await response.json()
+        if (!response.ok || json.error) throw new Error(json.error || `HTTP ${response.status}`)
+        if (!cancelled) setErpTotals(Object.fromEntries(json.months.map((m) => [m.month, m.total])))
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || 'Nepodařilo se načíst splněno z ERP')
+          setErpTotals(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [brandId, fromKey, toKey, fromOvtSheet])
+
+  const rows = monthKeys.map((key) => {
+    const summary = summarizeBucket(readMonthBucket(key, brandId))
+    const completed = erpTotals ? erpTotals[key] ?? 0 : summary.completed
+    const target = summary.target
+    const pct = target > 0 && completed != null ? Math.round((completed / target) * 100) : null
+    return { key, target, completed, pct }
+  })
+  const totalTarget = rows.reduce((sum, row) => sum + (row.target || 0), 0)
+  const totalCompleted = rows.reduce((sum, row) => sum + (row.completed || 0), 0)
+  const totalPct = totalTarget > 0 ? Math.round((totalCompleted / totalTarget) * 100) : null
+
+  return (
+    <details className="sla-cmp-details ops-targets-history" open>
+      <summary>
+        Zpětný přehled · {label} · {formatMonthLabel(fromKey)} – {formatMonthLabel(toKey)}
+        {loading ? ' · načítám splněno…' : ''}
+      </summary>
+      {error ? <p className="danger">{error}</p> : null}
+      <table className="sla-cmp-table">
+        <thead>
+          <tr>
+            <th>Měsíc</th>
+            <th>Cíl</th>
+            <th>Splněno</th>
+            <th>Plnění</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <td>{formatMonthLabel(row.key)}</td>
+              <td>{formatNumber(row.target)}</td>
+              <td>{loading && !fromOvtSheet ? '…' : formatNumber(row.completed)}</td>
+              <td>{row.pct != null ? `${row.pct} %` : '—'}</td>
+            </tr>
+          ))}
+          <tr className="fronty-total">
+            <td>Celkem</td>
+            <td>{totalTarget ? formatNumber(totalTarget) : '—'}</td>
+            <td>{formatNumber(totalCompleted)}</td>
+            <td>{totalPct != null ? `${totalPct} %` : '—'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
+  )
 }
 
 function BreakdownList({ title, rows, values, completed, helpId }) {
@@ -180,11 +274,26 @@ export default function OperationsTargetsPanel({
   /** 'erp' | 'ovt-sheet' — pokladamee bere techniky + splněno ze sheetu */
   completedSource = 'erp',
   /** U zaluzieee CZ/SK: pod sebou Target CZ i Target SK */
-  enableCzSkSwitch = false
+  enableCzSkSwitch = false,
+  /** Filtr období stránky — targety jsou měsíční, bere se měsíc konce filtru (+ zpětný přehled). */
+  period = '',
+  startDate = '',
+  endDate = ''
 }) {
   const targetsBrandId = brandId === 'sk' ? 'sk' : brandId
   const showCzSkStack = enableCzSkSwitch && (targetsBrandId === 'cz' || targetsBrandId === 'sk')
   const fromOvtSheet = completedSource === 'ovt-sheet'
+
+  const filterMonthKeys = useMemo(() => {
+    if (!period) return []
+    const { start, end } = resolveDateRange({ period, startDate, endDate })
+    return listMonthKeysInRange(getCurrentMonthKey(start), getCurrentMonthKey(end))
+  }, [period, startDate, endDate])
+  const filterMonthKey = filterMonthKeys[filterMonthKeys.length - 1] || ''
+  const historyFrom = filterMonthKeys.length > 1 ? filterMonthKeys[0] : ''
+
+  /** Kdy se naposledy synchronizovalo splněno pro `${month}|${brand}` — rozbalení karty nenačítá znovu. */
+  const lastSyncRef = useRef(new Map())
 
   const [monthKey, setMonthKey] = useState('')
   const [bucket, setBucket] = useState(null)
@@ -250,17 +359,22 @@ export default function OperationsTargetsPanel({
 
   async function syncBrandBucket(key, brand) {
     const initial = readMonthBucket(key, brand)
+    const syncKey = `${key}|${brand}`
+    const lastSync = lastSyncRef.current.get(syncKey)
+    if (lastSync && Date.now() - lastSync < SYNC_FRESH_MS) return initial
     if (fromOvtSheet) {
       if (brand !== targetsBrandId) return initial
       const { bucket: synced } = await syncTargetsCompletedFromOvtSheet(key, initial, {
         brandId: brand
       })
+      lastSyncRef.current.set(syncKey, Date.now())
       return synced
     }
     try {
       const { bucket: synced } = await syncTargetsCompletedFromErp(key, initial, {
         brandId: brand
       })
+      lastSyncRef.current.set(syncKey, Date.now())
       return synced
     } catch {
       return initial
@@ -298,13 +412,13 @@ export default function OperationsTargetsPanel({
   }
 
   useEffect(() => {
-    const month = readSelectedMonthKey()
+    const month = filterMonthKey || readSelectedMonthKey()
     setMonthKey(month)
     setView(readTargetsView())
     setExpandedBrand(null)
     setPanelBrandId(targetsBrandId)
     reloadBucket(month, true, targetsBrandId)
-  }, [targetsBrandId, organizationId, completedSource])
+  }, [targetsBrandId, organizationId, completedSource, filterMonthKey])
 
   useEffect(() => {
     if (!monthKey) return undefined
@@ -428,6 +542,11 @@ export default function OperationsTargetsPanel({
           : showCzSkStack
             ? 'Výsledky CZ i SK pod sebou. Rozklikněte kartu pro rozpad a splněno.'
             : 'Klikněte pro rozpad targetů — kraje a technici.'}
+        {filterMonthKey
+          ? ` Targety jsou měsíční — zobrazený měsíc = konec filtru období${
+              historyFrom ? ', starší měsíce filtru ve zpětném přehledu' : ''
+            }.`
+          : ''}
         {erpSyncing
           ? fromOvtSheet
             ? ' · Načítám techniky a splněno ze sheetu…'
@@ -472,6 +591,18 @@ export default function OperationsTargetsPanel({
           <span className="sla-kpi-root-toggle">{expanded ? 'Skrýt rozpad ▴' : 'Zobrazit rozpad ▾'}</span>
         </button>
       )}
+
+      {historyFrom
+        ? (showCzSkStack ? ['cz', 'sk'] : [targetsBrandId]).map((historyBrand) => (
+            <TargetsHistory
+              key={historyBrand}
+              brandId={historyBrand}
+              label={showCzSkStack ? `Target ${historyBrand.toUpperCase()}` : brandLabel}
+              monthKeys={filterMonthKeys}
+              fromOvtSheet={fromOvtSheet}
+            />
+          ))
+        : null}
 
       {expanded ? (
         <div className="ops-targets-panel targets-page">
