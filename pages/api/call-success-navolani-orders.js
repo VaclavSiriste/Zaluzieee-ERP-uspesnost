@@ -4,6 +4,7 @@
  */
 
 import { fetchErpYesNoOrders, isErpYesNoMetric } from '@/lib/dopadl-hovor-metrics'
+import { withCallbackInfo } from '@/lib/callback-info'
 import { getErpPool } from '@/lib/db-esm'
 import { resolveDateRange } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
@@ -79,7 +80,7 @@ export default async function handler(req, res) {
       total: result.total,
       limit: parsedLimit,
       offset: parsedOffset,
-      orders: result.orders
+      orders: await withCallbackInfo(getErpPool(brandId), result.orders)
     })
   } catch (error) {
     console.error('call-success-navolani-orders:', error.message)

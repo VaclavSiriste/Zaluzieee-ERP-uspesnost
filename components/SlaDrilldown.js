@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { CallbackCells, CallbackHeaders, hasCallbacks } from '@/components/CallbackColumns'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -101,6 +102,7 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
 
   const title = drilldown.title || data?.label || 'Seznam leadů'
   const hasMore = data ? data.orders.length < data.total : false
+  const showCallbacks = hasCallbacks(data?.orders)
   const isCalendar = data?.mode === 'calendar' || ['poptavky', 'sla24', 'sla48', 'sla72'].includes(drilldown.metric)
 
   const panel = (
@@ -175,6 +177,7 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
                           <th>Voláno</th>
                         )}
                         <th>Stav</th>
+                        {showCallbacks ? <CallbackHeaders /> : null}
                         <th>Detail</th>
                       </tr>
                     </thead>
@@ -208,6 +211,7 @@ export default function SlaDrilldown({ open, onClose, drilldown, filters }) {
                             </td>
                           )}
                           <td>{order.status || '—'}</td>
+                          {showCallbacks ? <CallbackCells order={order} /> : null}
                           <td>
                             {order.detail_url ? (
                               <a

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { CallbackCells, CallbackHeaders, hasCallbacks } from '@/components/CallbackColumns'
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -129,6 +130,7 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
   const title = drilldown.title || data?.label || 'Fronta trasovačů'
   const hasMore = data ? data.orders.length < data.total : false
   const isWaiting = drilldown.metric === 'waiting'
+  const showCallbacks = hasCallbacks(data?.orders)
 
   const panel = (
     <div className="drilldown-overlay" onClick={onClose} role="presentation">
@@ -185,6 +187,7 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
                         <th>Co se změnilo</th>
                         <th>Zákazník</th>
                         <th>Kraj</th>
+                        {showCallbacks ? <CallbackHeaders /> : null}
                         <th>Detail</th>
                       </tr>
                     </thead>
@@ -201,6 +204,7 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
                           <td>{formatFirstChange(order)}</td>
                           <td>{order.customer_name || '—'}</td>
                           <td>{order.region || '—'}</td>
+                          {showCallbacks ? <CallbackCells order={order} /> : null}
                           <td>
                             {order.detail_url ? (
                               <a

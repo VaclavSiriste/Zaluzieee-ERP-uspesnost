@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { CallbackCells, CallbackHeaders, hasCallbacks } from '@/components/CallbackColumns'
 
 export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters }) {
   const [mounted, setMounted] = useState(false)
@@ -78,6 +79,7 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
 
   const title = drilldown.title || data?.label || 'Detail navolání'
   const hasMore = data ? data.orders.length < data.total : false
+  const showCallbacks = hasCallbacks(data?.orders)
 
   const panel = (
     <div className="drilldown-overlay" onClick={onClose} role="presentation">
@@ -129,6 +131,7 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
                         <th>Kraj</th>
                         <th>Operátor</th>
                         <th>Hodnota</th>
+                        {showCallbacks ? <CallbackHeaders /> : null}
                         <th>Detail</th>
                       </tr>
                     </thead>
@@ -147,6 +150,7 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
                                 '—'}
                             </strong>
                           </td>
+                          {showCallbacks ? <CallbackCells order={order} /> : null}
                           <td>
                             {order.detail_url ? (
                               <a

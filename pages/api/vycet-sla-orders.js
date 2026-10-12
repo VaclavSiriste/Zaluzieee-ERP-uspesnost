@@ -5,6 +5,7 @@
  *   poptavky|sla24|sla48|sla72 → kalendářní filtr dle data přijetí / created_at
  */
 
+import { withCallbackInfo } from '@/lib/callback-info'
 import { getErpPool } from '@/lib/db-esm'
 import { SYSTEEEM_ORDER_URL, formatDateOnly } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
@@ -230,7 +231,7 @@ export default async function handler(req, res) {
       total: countResult.rows[0]?.total || 0,
       limit: parsedLimit,
       offset: parsedOffset,
-      orders: rows.map((row) => ({
+      orders: await withCallbackInfo(pool, rows.map((row) => ({
         order_id: row.order_id,
         organization_id: row.organization_id != null ? Number(row.organization_id) : null,
         business_date: row.business_date,
@@ -247,7 +248,7 @@ export default async function handler(req, res) {
         region: row.region,
         form_id: row.form_id,
         detail_url: `${SYSTEEEM_ORDER_URL}${row.order_id}`
-      }))
+      })))
     })
   } catch (error) {
     console.error('vycet-sla-orders:', error.message)
