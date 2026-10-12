@@ -1,29 +1,14 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Průměrný počet zaměření na OVT za den, po krajích.
- * Výchozí den = včera (dnešek ještě není uzavřený); šipkami jde den posunout.
+ * Průměrný počet zaměření na OVT za pracovní den v období filtru.
+ * Průměr = zaměření / (OVT × pracovní dny). SK po krajích, ostatní značky jen celkem.
  */
 
-function pragueDay(offsetDays = 0) {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Prague' })
-  const [y, m, d] = today.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + offsetDays)).toISOString().slice(0, 10)
-}
-
-function shiftDay(day, delta) {
-  const [y, m, d] = day.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10)
-}
-
 function formatDay(day) {
-  const [y, m, d] = day.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('cs-CZ', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'numeric',
-    year: 'numeric'
-  })
+  const [y, m, d] = String(day).split('-').map(Number)
+  if (!y || !m || !d) return day
+  return new Date(y, m - 1, d).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' })
 }
 
 function num(value) {
@@ -44,29 +29,28 @@ function OvtNames({ list }) {
   )
 }
 
-function Row({ region, isTotal = false }) {
+function Row({ region, isTotal = false, showNames = false }) {
   return (
     <tr className={`${region.service ? 'is-service' : ''}${isTotal ? ' rf-total' : ''}`}>
       <td className="rf-name">
         {region.name}
-        {isTotal ? null : <OvtNames list={region.ovt} />}
+        {showNames ? <OvtNames list={region.ovt} /> : null}
       </td>
       <td className="rf-leads">{num(region.zamereni)}</td>
       <td className="rf-leads">{num(region.ovt_count)}</td>
       <td className="rf-rate">
-        <strong>{avg(region.avg_per_ovt)}</strong>
+        <strong>{avg(region.avg_per_ovt_day)}</strong>
       </td>
       <td className="rf-leads">{region.bez_ovt ? num(region.bez_ovt) : '—'}</td>
     </tr>
   )
 }
 
-export default function OvtDailyLoadPanel({ brandId, brandLabel }) {
-  const yesterday = pragueDay(-1)
-  const [day, setDay] = useState(yesterday)
+export default function OvtDailyLoadPanel({ brandId, brandLabel, period, startDate = '', endDate = '' }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const byRegion = brandId === 'sk'
 
   useEffect(() => {
     let cancelled = false
@@ -74,7 +58,12 @@ export default function OvtDailyLoadPanel({ brandId, brandLabel }) {
       setLoading(true)
       setError('')
       try {
-        const params = new URLSearchParams({ brand: brandId, date: day })
+        const params = new URLSearchParams({
+          brand: brandId,
+          period,
+          ...(startDate ? { startDate } : {}),
+          ...(endDate ? { endDate } : {})
+        })
         const response = await fetch(`/api/ovt-daily-load?${params}`)
         const json = await response.json()
         if (!response.ok || json.error) throw new Error(json.error || `HTTP ${response.status}`)
@@ -92,39 +81,20 @@ export default function OvtDailyLoadPanel({ brandId, brandLabel }) {
     return () => {
       cancelled = true
     }
-  }, [brandId, day])
+  }, [brandId, period, startDate, endDate])
 
   return (
     <section className="sla-block sla-block-nested">
-      <div className="rf-head">
-        <h2 className="sla-block-title">Zaměření na OVT za den</h2>
-        <div className="sla-time-tabs" aria-label="Den">
-          <button type="button" className="sla-time-tab" onClick={() => setDay((d) => shiftDay(d, -1))} aria-label="Předchozí den">
-            ‹
-          </button>
-          <input
-            type="date"
-            className="ovt-load-date"
-            value={day}
-            max={yesterday}
-            onChange={(event) => event.target.value && setDay(event.target.value)}
-          />
-          <button
-            type="button"
-            className="sla-time-tab"
-            onClick={() => setDay((d) => shiftDay(d, 1))}
-            disabled={day >= yesterday}
-            aria-label="Další den"
-          >
-            ›
-          </button>
-        </div>
-      </div>
+      <h2 className="sla-block-title">Zaměření na OVT za pracovní den</h2>
       <p className="sla-block-desc">
-        {brandLabel} · {formatDay(day)}. Počet zaměření (datum zaměření v daný den, bez duplikací
-        a reklamací) / počet OVT, kteří ten den v kraji zaměřovali. Výchozí je včerejšek — dnešní den
-        ještě není uzavřený. Jeden OVT může zaměřovat ve více krajích, celkový průměr ho počítá jednou.
-        {brandId === 'sk' ? ' Zvýrazněné jsou kraje, kam jezdíme.' : ''}
+        {brandLabel}
+        {data ? ` · ${formatDay(data.startDate)} – ${formatDay(data.endDate)} · ${data.working_days} pracovních dní` : ''}.
+        {' '}Průměr = zaměření / (počet OVT × počet pracovních dní). Zaměření = datum zaměření v období,
+        bez duplikací a reklamací. Počet OVT = kdo v období aspoň jednou zaměřoval. Pracovní dny Po–Pá
+        (svátky se neodečítají), období končí nejpozději včerejškem — dnešek ještě není uzavřený.
+        {byRegion
+          ? ' OVT jezdící do více krajů se počítá v každém z nich, v řádku Celkem jen jednou. Zvýrazněné jsou kraje, kam jezdíme.'
+          : ''}
       </p>
       {error ? <p className="danger">{error}</p> : null}
       {loading ? (
@@ -139,10 +109,13 @@ export default function OvtDailyLoadPanel({ brandId, brandLabel }) {
             <table className="sla-cmp-table rf-table">
               <thead>
                 <tr>
-                  <th>Kraj</th>
+                  <th>{byRegion ? 'Kraj' : ''}</th>
                   <th>Zaměření</th>
                   <th>OVT</th>
-                  <th>Průměr na OVT</th>
+                  <th>
+                    Průměr na OVT a den
+                    <span className="rf-th-sub">zaměření / (OVT × {data.working_days} dní)</span>
+                  </th>
                   <th>
                     Bez OVT
                     <span className="rf-th-sub">nepřiřazený zaměřovač</span>
@@ -151,14 +124,16 @@ export default function OvtDailyLoadPanel({ brandId, brandLabel }) {
               </thead>
               <tbody>
                 {data.regions.map((region) => (
-                  <Row key={region.id} region={region} />
+                  <Row key={region.id} region={region} showNames />
                 ))}
-                <Row region={data.totals} isTotal />
+                <Row region={data.totals} isTotal showNames={!byRegion} />
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="sla-cmp-note">V tento den nejsou žádná zaměření.</p>
+          <p className="sla-cmp-note">
+            {data.working_days ? 'V tomto období nejsou žádná zaměření.' : 'Období ještě nemá žádný uzavřený pracovní den.'}
+          </p>
         )
       ) : null}
     </section>

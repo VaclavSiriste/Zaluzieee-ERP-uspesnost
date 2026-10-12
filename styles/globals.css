@@ -5338,22 +5338,6 @@ h6 {
   white-space: normal;
 }
 
-.ovt-load-date {
-  border: 0;
-  background: #fff;
-  border-radius: 999px;
-  padding: 3px 10px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1e2a52;
-}
-
-.sla-time-tab:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
 .rf-leads,
 .rf-rate {
   text-align: right;
