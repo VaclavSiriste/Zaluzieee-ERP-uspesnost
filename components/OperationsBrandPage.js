@@ -1079,7 +1079,13 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
           )}
 
           {brand.navolaniSource === 'ovt-sheet' ? null : (
-            <OvtDailyLoadPanel brandId={brand.id} brandLabel={brand.pageTitle} />
+            <OvtDailyLoadPanel
+              brandId={brand.id}
+              brandLabel={brand.pageTitle}
+              period={period}
+              startDate={startDate}
+              endDate={endDate}
+            />
           )}
 
           <LeadReasonPies

@@ -1,8 +1,10 @@
 /**
- * Průměrný počet zaměření na OVT za den, po krajích
- * GET /api/ovt-daily-load?brand=cz|sk|venkovky&date=YYYY-MM-DD (výchozí = včera, Europe/Prague)
+ * Průměrný počet zaměření na OVT za pracovní den
+ * GET /api/ovt-daily-load?brand=cz|sk|venkovky&period=&startDate=&endDate=
+ * Konec období se omezí na včerejšek (dnešní den ještě není uzavřený).
  */
 
+import { formatDateOnly, resolveDateRange } from '@/lib/metrics-query'
 import { resolveOrganizationId } from '@/lib/operations-brands'
 import { fetchOvtDailyLoad } from '@/lib/ovt-daily-load'
 import { resolveOvtSheetBrand } from '@/lib/ovt-sheet'
@@ -23,16 +25,34 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Zaměření na OVT je jen pro ERP značky (CZ, SK, Venkovky).' })
   }
 
-  const rawDate = typeof req.query.date === 'string' ? req.query.date.trim() : ''
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : yesterdayPrague()
-
   try {
+    const { start, end } = resolveDateRange({
+      period: typeof req.query.period === 'string' ? req.query.period : 'month',
+      startDate: typeof req.query.startDate === 'string' ? req.query.startDate : '',
+      endDate: typeof req.query.endDate === 'string' ? req.query.endDate : ''
+    })
+    const yesterday = yesterdayPrague()
+    const startDay = formatDateOnly(start)
+    const endDay = formatDateOnly(end) > yesterday ? yesterday : formatDateOnly(end)
+
+    if (startDay > endDay) {
+      return res.status(200).json({
+        brand: brandId,
+        startDate: startDay,
+        endDate: endDay,
+        working_days: 0,
+        regions: [],
+        totals: { id: 'total', name: 'Celkem', zamereni: 0, bez_ovt: 0, ovt_count: 0, avg_per_ovt_day: null, ovt: [] }
+      })
+    }
+
     const data = await fetchOvtDailyLoad({
       brandId,
       organizationId: resolveOrganizationId({ brandId }),
-      date
+      startDay,
+      endDay
     })
-    return res.status(200).json({ brand: brandId, date, ...data })
+    return res.status(200).json({ brand: brandId, startDate: startDay, endDate: endDay, ...data })
   } catch (error) {
     console.error('ovt-daily-load:', error.message)
     return res.status(500).json({ error: error.message || 'Chyba načtení zaměření na OVT' })
