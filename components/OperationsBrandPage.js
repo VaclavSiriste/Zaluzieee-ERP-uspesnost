@@ -14,6 +14,7 @@ import OperationsTargetsPanel from '@/components/OperationsTargetsPanel'
 import PauseDrilldown from '@/components/PauseDrilldown'
 import RegionFunnelPanel from '@/components/RegionFunnelPanel'
 import OvtDailyLoadPanel from '@/components/OvtDailyLoadPanel'
+import OvtTravelPanel from '@/components/OvtTravelPanel'
 import SlaComparePanel from '@/components/SlaComparePanel'
 import SlaDrilldown from '@/components/SlaDrilldown'
 import Sla30Reasons from '@/components/Sla30Reasons'
@@ -1087,6 +1088,16 @@ export default function OperationsBrandPage({ brandId = 'cz' }) {
               endDate={endDate}
             />
           )}
+
+          {brand.showOvtTravel ? (
+            <OvtTravelPanel
+              brandId={brand.id}
+              brandLabel={brand.pageTitle}
+              period={period}
+              startDate={startDate}
+              endDate={endDate}
+            />
+          ) : null}
 
           <LeadReasonPies
             brandId={brand.id}
