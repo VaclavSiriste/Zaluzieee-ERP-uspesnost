@@ -1,28 +1,37 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Přejezdy OVT z kalendáře (plánovaný čas) po krajích cílové schůzky.
+ * Den OVT z kalendáře (SK): zaměření a přejezdy na OVT a den směny, po krajích.
  */
 
 function num(value) {
   return Number(value || 0).toLocaleString('cs-CZ')
 }
 
+function dec(value, digits = 1) {
+  if (value == null) return '—'
+  return value.toLocaleString('cs-CZ', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+}
+
 function minutes(value) {
   if (value == null) return '—'
-  return `${value.toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} min`
+  const total = Math.round(value)
+  if (total < 60) return `${total} min`
+  return `${Math.floor(total / 60)} h ${String(total % 60).padStart(2, '0')} min`
 }
 
 function Row({ region, isTotal = false }) {
   return (
     <tr className={`${region.service ? 'is-service' : ''}${isTotal ? ' rf-total' : ''}`}>
       <td className="rf-name">{region.name}</td>
-      <td className="rf-leads">{num(region.prejezdu)}</td>
+      <td className="rf-leads">{num(region.dni_ovt)}</td>
       <td className="rf-leads">{num(region.ovt_count)}</td>
+      <td className="rf-rate">{dec(region.zamereni_na_den)}</td>
+      <td className="rf-rate">{dec(region.prejezdu_na_den)}</td>
       <td className="rf-rate">
-        <strong>{minutes(region.avg_min)}</strong>
+        <strong>{minutes(region.prejezd_min_na_den)}</strong>
       </td>
-      <td className="rf-rate">{minutes(region.median_min)}</td>
+      <td className="rf-rate">{minutes(region.min_na_prejezd)}</td>
     </tr>
   )
 }
@@ -65,13 +74,12 @@ export default function OvtTravelPanel({ brandId, brandLabel, period, startDate 
 
   return (
     <section className="sla-block sla-block-nested">
-      <h2 className="sla-block-title">Přejezdy OVT (kalendář)</h2>
+      <h2 className="sla-block-title">Den OVT – zaměření a přejezdy (kalendář)</h2>
       <p className="sla-block-desc">
-        {brandLabel}. Plánovaný čas přejezdu z kalendáře ERP — bloky „Přejezd“, které operátoři
-        zapisují při plánování (ne skutečná jízda). Jen OVT, kteří mají ten den v kalendáři
-        nastavenou směnu. Kraj = kraj zákazníka zaměření, na které OVT
-        po přejezdu jede (stejný den). Přejezdy bez navazujícího zaměření (montáž, cesta domů…)
-        zvlášť. Bloky se plánují po 30 min, proto medián často vychází 30 min. Zvýrazněné jsou kraje,
+        {brandLabel}. Průměr na OVT a den směny: za každý den, kdy má OVT v kalendáři nastavenou
+        směnu, počet zaměření, počet přejezdů a čas přejezdů. Přejezdy = bloky „Přejezd“, které
+        operátoři zapisují při plánování (plánovaný čas, ne skutečná jízda; plánují se po 30 min).
+        Kraj dne = kraj, kde měl OVT ten den nejvíc zaměření. Jen proběhlé dny. Zvýrazněné jsou kraje,
         kam jezdíme.
       </p>
       {error ? <p className="danger">{error}</p> : null}
@@ -82,16 +90,24 @@ export default function OvtTravelPanel({ brandId, brandLabel, period, startDate 
         </div>
       ) : null}
       {!loading && data ? (
-        data.totals.prejezdu ? (
+        data.totals.dni_ovt ? (
           <div className="fronty-table-wrap">
             <table className="sla-cmp-table rf-table">
               <thead>
                 <tr>
                   <th>Kraj</th>
-                  <th>Přejezdů</th>
+                  <th>
+                    Dní OVT
+                    <span className="rf-th-sub">OVT × den se směnou</span>
+                  </th>
                   <th>OVT</th>
-                  <th>Průměr přejezdu</th>
-                  <th>Medián</th>
+                  <th>Zaměření / den</th>
+                  <th>Přejezdů / den</th>
+                  <th>
+                    Přejezdy / den
+                    <span className="rf-th-sub">čas za den</span>
+                  </th>
+                  <th>Průměrný přejezd</th>
                 </tr>
               </thead>
               <tbody>
@@ -103,7 +119,7 @@ export default function OvtTravelPanel({ brandId, brandLabel, period, startDate 
             </table>
           </div>
         ) : (
-          <p className="sla-cmp-note">V tomto období nejsou v kalendáři žádné přejezdy.</p>
+          <p className="sla-cmp-note">V tomto období nemá žádný OVT v kalendáři směnu.</p>
         )
       ) : null}
     </section>
