@@ -68,7 +68,8 @@ export default function OvtTravelPanel({ brandId, brandLabel, period, startDate 
       <h2 className="sla-block-title">Přejezdy OVT (kalendář)</h2>
       <p className="sla-block-desc">
         {brandLabel}. Plánovaný čas přejezdu z kalendáře ERP — bloky „Přejezd“, které operátoři
-        zapisují při plánování (ne skutečná jízda). Kraj = kraj zákazníka zaměření, na které OVT
+        zapisují při plánování (ne skutečná jízda). Jen OVT, kteří mají ten den v kalendáři
+        nastavenou směnu. Kraj = kraj zákazníka zaměření, na které OVT
         po přejezdu jede (stejný den). Přejezdy bez navazujícího zaměření (montáž, cesta domů…)
         zvlášť. Bloky se plánují po 30 min, proto medián často vychází 30 min. Zvýrazněné jsou kraje,
         kam jezdíme.
