@@ -77,10 +77,10 @@ export default function OvtTravelPanel({ brandId, brandLabel, period, startDate 
       <h2 className="sla-block-title">Den OVT – zaměření a přejezdy (kalendář)</h2>
       <p className="sla-block-desc">
         {brandLabel}. Průměr na OVT a den směny: za každý den, kdy má OVT v kalendáři nastavenou
-        směnu, počet zaměření, počet přejezdů a čas přejezdů. Přejezd = čas mezi koncem schůzky
-        a začátkem další schůzky téhož OVT ten den (z kalendáře, ne skutečná jízda; při překryvu
-        schůzek 0 min). Kraj dne = kraj, kde měl OVT ten den nejvíc zaměření. Jen proběhlé dny.
-        Zvýrazněné jsou kraje, kam jezdíme.
+        směnu, počet zaměření, počet přejezdů a čas přejezdů. Přejezd = aktivita v kalendáři
+        s názvem přesně „Přejezd“ / „přejezd“ (jiné názvy jako „12,8“ nebo „Přejezd domů“ se
+        nepočítají), délka = konec − začátek aktivity. Kraj dne = kraj, kde měl OVT ten den nejvíc
+        zaměření. Jen proběhlé dny. Zvýrazněné jsou kraje, kam jezdíme.
       </p>
       {error ? <p className="danger">{error}</p> : null}
       {loading ? (
