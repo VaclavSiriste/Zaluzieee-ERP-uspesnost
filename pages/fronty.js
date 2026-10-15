@@ -243,18 +243,14 @@ function CallbacksTable({ data, brandId }) {
         </div>
       ) : null}
       {rows.length ? (
-        <div className="fronty-table-wrap">
+        <div className="fronty-table-wrap fronty-compact">
           <table className="sla-cmp-table">
             <thead>
               <tr>
-                <th>Zákazník / objednávka</th>
-                <th>Telefon</th>
-                <th>Kraj</th>
+                <th>Volat na ▲</th>
+                <th>Zákazník</th>
+                <th>Kdo zadal</th>
                 <th>Stav v ERP</th>
-                <th>Kdo zadal (Kdo domluvil)</th>
-                <th>Zadáno</th>
-                <th>Volat na kdy ▲</th>
-                <th>Termín</th>
               </tr>
             </thead>
             <tbody>
@@ -262,18 +258,23 @@ function CallbacksTable({ data, brandId }) {
                 const due = CALLBACK_DUE[row.callback_due] || CALLBACK_DUE.missing
                 return (
                   <tr key={row.order_id} className={row.callback_due === 'overdue' ? 'callback-overdue' : ''}>
+                    <td className="fronty-col-when">
+                      <strong>{callbackWhen(row)}</strong>
+                      <div>
+                        <span className={`sla-cmp-pill sla-cmp-tone-${due.tone}`}>{due.label}</span>
+                      </div>
+                    </td>
                     <td>
                       <OrderLink row={row} />
+                      <div className="fronty-sub">
+                        {[row.phone, row.region !== '—' ? row.region : null].filter(Boolean).join(' · ') || '—'}
+                      </div>
                     </td>
-                    <td>{row.phone || '—'}</td>
-                    <td>{row.region}</td>
-                    <td>{row.status}</td>
-                    <td>{row.callback_set_by || '—'}</td>
-                    <td>{dateTime(row.callback_set_at)}</td>
-                    <td>{callbackWhen(row)}</td>
                     <td>
-                      <span className={`sla-cmp-pill sla-cmp-tone-${due.tone}`}>{due.label}</span>
+                      {row.callback_set_by || '—'}
+                      {row.callback_set_at ? <div className="fronty-sub">{dateTime(row.callback_set_at)}</div> : null}
                     </td>
+                    <td className="fronty-col-status">{row.status}</td>
                   </tr>
                 )
               })}
@@ -294,13 +295,11 @@ function ErpOldestTable({ rows }) {
   return (
     <details className="sla-cmp-details">
       <summary>Nejdéle čekající ({rows.length})</summary>
-      <div className="fronty-table-wrap">
+      <div className="fronty-table-wrap fronty-compact">
         <table className="sla-cmp-table">
           <thead>
             <tr>
-              <th>Zákazník / objednávka</th>
-              <th>Telefon</th>
-              <th>Kraj</th>
+              <th>Zákazník</th>
               <th>Fronta</th>
               <th>Ve stavu od</th>
               <th>Čeká</th>
@@ -311,9 +310,10 @@ function ErpOldestTable({ rows }) {
               <tr key={row.order_id}>
                 <td>
                   <OrderLink row={row} />
+                  <div className="fronty-sub">
+                    {[row.phone, row.region !== '—' ? row.region : null].filter(Boolean).join(' · ') || '—'}
+                  </div>
                 </td>
-                <td>{row.phone || '—'}</td>
-                <td>{row.region}</td>
                 <td>{row.queue_label}</td>
                 <td>{dateTime(row.entered_at)}</td>
                 <td>
