@@ -5632,6 +5632,22 @@ h6 {
 }
 
 /* ---- Fronty – nenavolané leady ---- */
+/* Callback po termínu (preferované datum + čas už minuly) — červený řádek */
+tr.callback-overdue td {
+  background: #fdecec;
+  color: #b91c1c;
+}
+
+tr.callback-overdue td a {
+  color: #b91c1c;
+}
+
+.callback-due-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b91c1c;
+}
+
 .fronty-section + .fronty-section {
   margin-top: 32px;
 }

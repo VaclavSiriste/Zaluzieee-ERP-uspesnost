@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CallbackCells, CallbackHeaders, hasCallbacks } from '@/components/CallbackColumns'
+import {
+  CallbackCells,
+  CallbackHeaders,
+  callbackRowClass,
+  hasCallbacks,
+  sortByCallbackDue
+} from '@/components/CallbackColumns'
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -131,6 +137,8 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
   const hasMore = data ? data.orders.length < data.total : false
   const isWaiting = drilldown.metric === 'waiting'
   const showCallbacks = hasCallbacks(data?.orders)
+  // callbacky nahoru vzestupně podle preferovaného termínu
+  const orders = showCallbacks ? sortByCallbackDue(data.orders) : data?.orders || []
 
   const panel = (
     <div className="drilldown-overlay" onClick={onClose} role="presentation">
@@ -192,8 +200,8 @@ export default function TrasovacResponseDrilldown({ open, onClose, drilldown, fi
                       </tr>
                     </thead>
                     <tbody>
-                      {data.orders.map((order) => (
-                        <tr key={`${order.order_id}-${order.entered_at || ''}`}>
+                      {orders.map((order) => (
+                        <tr key={`${order.order_id}-${order.entered_at || ''}`} className={callbackRowClass(order)}>
                           <td>{order.order_id}</td>
                           <td>{formatDateTime(order.entered_at)}</td>
                           <td>{formatDateTime(order.first_change_at)}</td>
