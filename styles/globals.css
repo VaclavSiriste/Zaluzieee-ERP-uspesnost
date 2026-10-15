@@ -5656,6 +5656,46 @@ tr.callback-overdue td a {
   margin-top: 12px;
 }
 
+.fronty-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 10px 0 12px;
+}
+
+.fronty-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.fronty-filters select {
+  min-width: 200px;
+  padding: 7px 10px;
+  border: 1px solid #d9e2ff;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e2a52;
+}
+
+.fronty-filter-reset {
+  padding: 7px 12px;
+  border: 1px solid #d9e2ff;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .fronty-tabs {
   display: flex;
   flex-wrap: wrap;

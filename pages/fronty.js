@@ -137,16 +137,110 @@ function QueueTable({ data, erp }) {
   )
 }
 
-function CallbacksTable({ data }) {
-  const rows = data.callbacks || []
+const ALL = ''
+const EMPTY_SET_BY = '__nevyplneno__'
+
+/** Filtr Volat později (kdo zadal / stav ERP) — pamatuje se v prohlížeči zvlášť pro každou značku. */
+function useCallbackFilter(brandId) {
+  const storageKey = `prvni.fronty.callbackFilter.${brandId}`
+  const [filter, setFilter] = useState({ setBy: ALL, status: ALL })
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(storageKey) || 'null')
+      if (stored && typeof stored === 'object') {
+        setFilter({ setBy: String(stored.setBy || ALL), status: String(stored.status || ALL) })
+      }
+    } catch {
+      // zablokované úložiště — filtr jen nepřežije reload
+    }
+  }, [storageKey])
+
+  function update(patch) {
+    setFilter((current) => {
+      const next = { ...current, ...patch }
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next))
+      } catch {
+        // ignorovat
+      }
+      return next
+    })
+  }
+
+  return [filter, update]
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b, 'cs'))
+}
+
+function CallbacksTable({ data, brandId }) {
+  const allRows = data.callbacks || []
+  const [filter, updateFilter] = useCallbackFilter(brandId)
+
+  const setByOptions = uniqueSorted(allRows.map((row) => row.callback_set_by).filter(Boolean))
+  const hasEmptySetBy = allRows.some((row) => !row.callback_set_by)
+  const statusOptions = uniqueSorted(allRows.map((row) => row.status).filter(Boolean))
+
+  // uložený výběr, který v datech už není (jiný den / značka), se ignoruje
+  const setBy =
+    filter.setBy === EMPTY_SET_BY ? (hasEmptySetBy ? EMPTY_SET_BY : ALL) : setByOptions.includes(filter.setBy) ? filter.setBy : ALL
+  const status = statusOptions.includes(filter.status) ? filter.status : ALL
+
+  const rows = allRows.filter((row) => {
+    if (setBy === EMPTY_SET_BY && row.callback_set_by) return false
+    if (setBy && setBy !== EMPTY_SET_BY && row.callback_set_by !== setBy) return false
+    if (status && row.status !== status) return false
+    return true
+  })
+  const filtered = rows.length !== allRows.length
+  const overdue = rows.filter((row) => row.callback_due === 'overdue').length
+
   return (
     <details className="sla-cmp-details" open>
       <summary>
-        Volat později ({data.callbacks_total}
-        {data.callbacks_overdue ? ` · ${data.callbacks_overdue} po termínu` : ''})
+        Volat později ({filtered ? `${rows.length} z ${data.callbacks_total}` : data.callbacks_total}
+        {overdue ? ` · ${overdue} po termínu` : ''})
       </summary>
       {!data.audit_available ? (
         <p className="sla-cmp-note">V této ERP instanci chybí audit log — čas „Zadáno“ nelze dohledat.</p>
+      ) : null}
+      {allRows.length ? (
+        <div className="fronty-filters" role="group" aria-label="Filtr Volat později">
+          <label>
+            <span>Kdo zadal</span>
+            <select value={setBy} onChange={(event) => updateFilter({ setBy: event.target.value })}>
+              <option value={ALL}>Všichni ({allRows.length})</option>
+              {setByOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name} ({allRows.filter((row) => row.callback_set_by === name).length})
+                </option>
+              ))}
+              {hasEmptySetBy ? (
+                <option value={EMPTY_SET_BY}>
+                  Nevyplněno ({allRows.filter((row) => !row.callback_set_by).length})
+                </option>
+              ) : null}
+            </select>
+          </label>
+          <label>
+            <span>Stav v ERP</span>
+            <select value={status} onChange={(event) => updateFilter({ status: event.target.value })}>
+              <option value={ALL}>Všechny</option>
+              {statusOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value} ({allRows.filter((row) => row.status === value).length})
+                </option>
+              ))}
+            </select>
+          </label>
+          {filtered ? (
+            <button type="button" className="fronty-filter-reset" onClick={() => updateFilter({ setBy: ALL, status: ALL })}>
+              Zrušit filtr
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {rows.length ? (
         <div className="fronty-table-wrap">
@@ -187,7 +281,9 @@ function CallbacksTable({ data }) {
           </table>
         </div>
       ) : (
-        <p className="sla-cmp-note">Žádné callbacky „Volat později“.</p>
+        <p className="sla-cmp-note">
+          {allRows.length ? 'Filtru neodpovídá žádný callback.' : 'Žádné callbacky „Volat později“.'}
+        </p>
       )}
     </details>
   )
@@ -390,7 +486,7 @@ function FrontySection({ brandId, period, startDate, endDate, showHeading }) {
 
           {erp ? (
             <>
-              <CallbacksTable data={data} />
+              <CallbacksTable data={data} brandId={brandId} />
               <ErpOldestTable rows={data.oldest} />
             </>
           ) : (
