@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CallbackCells, CallbackHeaders, hasCallbacks } from '@/components/CallbackColumns'
+import {
+  CallbackCells,
+  CallbackHeaders,
+  callbackRowClass,
+  hasCallbacks,
+  sortByCallbackDue
+} from '@/components/CallbackColumns'
 
 export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters }) {
   const [mounted, setMounted] = useState(false)
@@ -80,6 +86,8 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
   const title = drilldown.title || data?.label || 'Detail navolání'
   const hasMore = data ? data.orders.length < data.total : false
   const showCallbacks = hasCallbacks(data?.orders)
+  // callbacky nahoru vzestupně podle preferovaného termínu
+  const orders = showCallbacks ? sortByCallbackDue(data.orders) : data?.orders || []
 
   const panel = (
     <div className="drilldown-overlay" onClick={onClose} role="presentation">
@@ -136,8 +144,8 @@ export default function ErpNavolaniDrilldown({ open, onClose, drilldown, filters
                       </tr>
                     </thead>
                     <tbody>
-                      {data.orders.map((order) => (
-                        <tr key={order.order_id}>
+                      {orders.map((order) => (
+                        <tr key={order.order_id} className={callbackRowClass(order)}>
                           <td>{order.filter_date || '—'}</td>
                           <td>{order.customer_name || '—'}</td>
                           <td>{order.region || '—'}</td>

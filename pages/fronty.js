@@ -146,7 +146,7 @@ function CallbacksTable({ data }) {
         {data.callbacks_overdue ? ` · ${data.callbacks_overdue} po termínu` : ''})
       </summary>
       {!data.audit_available ? (
-        <p className="sla-cmp-note">V této ERP instanci chybí audit log — „Kdo zadal“ nelze dohledat.</p>
+        <p className="sla-cmp-note">V této ERP instanci chybí audit log — čas „Zadáno“ nelze dohledat.</p>
       ) : null}
       {rows.length ? (
         <div className="fronty-table-wrap">
@@ -157,9 +157,9 @@ function CallbacksTable({ data }) {
                 <th>Telefon</th>
                 <th>Kraj</th>
                 <th>Stav v ERP</th>
-                <th>Kdo zadal</th>
+                <th>Kdo zadal (Kdo domluvil)</th>
                 <th>Zadáno</th>
-                <th>Volat na kdy</th>
+                <th>Volat na kdy ▲</th>
                 <th>Termín</th>
               </tr>
             </thead>
@@ -167,7 +167,7 @@ function CallbacksTable({ data }) {
               {rows.map((row) => {
                 const due = CALLBACK_DUE[row.callback_due] || CALLBACK_DUE.missing
                 return (
-                  <tr key={row.order_id}>
+                  <tr key={row.order_id} className={row.callback_due === 'overdue' ? 'callback-overdue' : ''}>
                     <td>
                       <OrderLink row={row} />
                     </td>
