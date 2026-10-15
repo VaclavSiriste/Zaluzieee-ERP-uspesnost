@@ -5752,6 +5752,37 @@ tr.callback-overdue td a {
   white-space: nowrap;
 }
 
+/* Fronty – kompaktní seznamy (Volat později, Nejdéle čekající): zalamování místo posouvání do strany */
+.fronty-table-wrap.fronty-compact td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.fronty-compact .fronty-col-when {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.fronty-compact .fronty-col-when .sla-cmp-pill {
+  margin-top: 4px;
+}
+
+.fronty-compact .fronty-col-status {
+  font-size: 12px;
+  color: #475569;
+}
+
+.fronty-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+tr.callback-overdue .fronty-sub {
+  color: #b91c1c;
+}
+
 /* Mřížky s tabulkami nesmí přetéct kartu – tabulka se posouvá uvnitř */
 .sla-cmp {
   grid-template-columns: minmax(0, 1fr);
