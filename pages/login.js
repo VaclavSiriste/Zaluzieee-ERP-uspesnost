@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/router'
+import { isEmailLoginEnabled, isSsoEnabled } from '@/lib/sso'
 
-export default function LoginPage() {
+const LOGIN_ERRORS = {
+  sso_off: 'Přihlášení přes SSO není zapnuté.',
+  sso_unavailable: 'SSO je teď nedostupné. Zkuste to za chvíli znovu.',
+  sso_denied: 'Přihlášení přes SSO bylo zrušeno nebo zamítnuto.',
+  sso_domain: 'Tento účet nemá do dashboardu přístup (povolené jsou @zaluzieee.cz, @demaxia.cz a @3eee.cz).',
+  sso_failed: 'Přihlášení přes SSO se nepovedlo. Zkuste to znovu.'
+}
+
+export async function getServerSideProps() {
+  return { props: { ssoEnabled: isSsoEnabled(), emailLoginEnabled: isEmailLoginEnabled() } }
+}
+
+export default function LoginPage({ ssoEnabled = false, emailLoginEnabled = true }) {
   const router = useRouter()
   const [step, setStep] = useState('email')
   const [email, setEmail] = useState('')
@@ -19,7 +32,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (typeof router.query.error === 'string') {
-      setError(router.query.error)
+      setError(LOGIN_ERRORS[router.query.error] || router.query.error)
     }
   }, [router.query.error])
 
@@ -84,7 +97,19 @@ export default function LoginPage() {
         <div className="login-kicker">Interní přístup</div>
         <h1>Vstup do dashboardu</h1>
 
-        {step === 'email' ? (
+        {ssoEnabled ? (
+          <div className="login-form">
+            <a className="login-sso-button" href={`/api/auth/sso/login?next=${encodeURIComponent(nextPath)}`}>
+              Přihlásit se přes SSO
+            </a>
+            <p className="login-hint">Firemním účtem Google přes access.systeeem.cz</p>
+            {!emailLoginEnabled && error ? <p className="login-error">{error}</p> : null}
+          </div>
+        ) : null}
+
+        {ssoEnabled && emailLoginEnabled ? <div className="login-divider">nebo e-mailovým kódem</div> : null}
+
+        {!emailLoginEnabled ? null : step === 'email' ? (
           <form className="login-form" onSubmit={handleRequestCode}>
             <label htmlFor="email">Firemní e-mail</label>
             <input
