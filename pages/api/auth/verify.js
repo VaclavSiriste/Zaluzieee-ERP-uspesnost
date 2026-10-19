@@ -2,8 +2,15 @@ import { buildAuthCookie, createAuthToken, isAllowedEmail } from '@/lib/auth'
 import { verifyMagicLoginToken } from '@/lib/auth-challenge'
 import { OPERATORS_HOME_PATH } from '@/lib/access-control'
 import { canAccessPath, getHomePathForEmail } from '@/lib/access-control-server'
+import { isEmailLoginEnabled } from '@/lib/sso'
 
 export default async function handler(req, res) {
+  if (!isEmailLoginEnabled()) {
+    res.writeHead(302, { Location: '/login' })
+    res.end()
+    return
+  }
+
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
     return res.status(405).json({ error: 'Method not allowed' })

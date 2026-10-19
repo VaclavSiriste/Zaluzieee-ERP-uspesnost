@@ -2,8 +2,13 @@ import { buildAuthCookie, createAuthToken, isAllowedEmail, getAllowedDomain } fr
 import { verifyCodeChallenge } from '@/lib/auth-challenge'
 import { OPERATORS_HOME_PATH } from '@/lib/access-control'
 import { getHomePathForEmail } from '@/lib/access-control-server'
+import { isEmailLoginEnabled } from '@/lib/sso'
 
 export default async function handler(req, res) {
+  if (!isEmailLoginEnabled()) {
+    return res.status(403).json({ error: 'Přihlášení e-mailovým kódem je vypnuté — použijte Přihlásit se přes SSO.' })
+  }
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
